@@ -12,18 +12,18 @@ extern "C" {
 	}
 }
 
-std::string line;
-const char* input(char* _) {
-	std::cout << "> " << std::flush;
-	std::getline(std::cin, line);
+// std::string line;
+// const char* input(char* _) {
+// 	std::cout << "> " << std::flush;
+// 	std::getline(std::cin, line);
 
-	return line.c_str();
-}
+// 	return line.c_str();
+// }
 
 const char* print(char* message) {
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
-	std::cout << "\x1b[32m" << message << "\x1b[0m> " << std::flush;
+	std::cout << "\x1b[32m" << message << "\n\x1b[0m> " << std::flush;
 	return "good";
 }
 
@@ -55,12 +55,19 @@ int main(int argc, char* argv[]) {
 	Args args = argparse::parse<Args>(argc, argv);
 
 	setPrintCallback(print);
-	setInputCallback(input);
-	// setCallback(callback);
 
-	auto t = std::thread([=] { run(args.sourcePort, {args.dest.data(), (long)args.dest.size()}, args.debug); });
+	std::string_view s = "chat/v1.0.1";
+	auto id = initialize({s.data(), (long)s.size()}, true, 0);
+
+	std::cout << "listening to topic: " << id << std::endl;
+
+	std::string line;
+	while(true){
+		std::cout << "> " << std::flush;
+		std::getline(std::cin, line);
+
+		bool success = broadcastMessage({line.data(), (long)line.size()}, id);
+	}
 
 	std::cout << "Will this ever run?" << std::endl;
-
-	t.join();
 }
