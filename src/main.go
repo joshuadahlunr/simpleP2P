@@ -35,6 +35,7 @@ extern const char* bridge_str_callback(char* s, str_callback f);
 */
 import "C"
 import "unsafe"
+import "errors"
 
 import (
 	"bufio"
@@ -56,42 +57,11 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-func handleStream(s network.Stream) {
-	log.Println("Got a new stream!")
-
-	// Create a buffer stream for non-blocking read and write.
-	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-
-	go readData(rw)
-	go writeData(rw)
-
-	// stream 's' will stay open until you close it (or the other side closes it).
-}
-
 var printCallback C.str_callback 
 
 //export setPrintCallback
 func setPrintCallback(callback C.str_callback) {
 	printCallback = callback
-}
-
-func readData(rw *bufio.ReadWriter) {
-	for {
-		str, _ := rw.ReadString('\n')
-
-		if str == "" {
-			return
-		}
-		if str != "\n" {
-			cstr := C.CString(str)
-			defer C.free(unsafe.Pointer(cstr))
-
-			if C.bridge_str_callback(cstr, printCallback) == nil {
-				return
-			}
-		}
-
-	}
 }
 
 var inputCallback C.str_callback 
@@ -107,14 +77,65 @@ func setCallback(callback C.str_callback) {
 	setInputCallback(callback)
 }
 
+func cWrite(data string) error {
+	cstr := C.CString(data)
+	defer C.free(unsafe.Pointer(cstr))
+
+	if C.bridge_str_callback(cstr, printCallback) == nil {
+		return errors.New("Failed to write data")
+	}
+	return nil
+}
+
+func cRead() (string, error) {
+	cstr := C.bridge_str_callback(nil, inputCallback)
+	if cstr == nil {
+		return "", errors.New("Failed to read data")
+	}
+
+	return C.GoString(cstr), nil
+}
+
+
+
+
+
+func handleStream(s network.Stream) {
+	log.Println("Got a new stream!")
+
+	// Create a buffer stream for non-blocking read and write.
+	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
+
+	go readData(rw)
+	go writeData(rw)
+
+	// stream 's' will stay open until you close it (or the other side closes it).
+}
+
+func readData(rw *bufio.ReadWriter) {
+	for {
+		str, _ := rw.ReadString('\n')
+
+		if str == "" {
+			return
+		}
+		if str != "\n" {
+			if cWrite(str) != nil {
+				return
+			}
+		}
+
+	}
+}
+
 func writeData(rw *bufio.ReadWriter) {
 	for {
-		cstr := C.bridge_str_callback(nil, inputCallback)
-		if cstr == nil {
+		data, err := cRead()
+		if err != nil {
 			return
 		}
 
-		rw.WriteString(fmt.Sprintf("%s\n", C.GoString(cstr)))
+		rw.WriteString(fmt.Sprintf("%s\n", data))
 		rw.Flush()
 	}
 }
@@ -170,7 +191,7 @@ func makeHost(port int, randomness io.Reader) (host.Host, error) {
 	}
 
 	// 0.0.0.0 will listen on any interface device.
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port))
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/udp/%d/quic-v1/", port))
 
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
@@ -186,10 +207,10 @@ func startPeer(ctx context.Context, h host.Host, streamHandler network.StreamHan
 	// Only applies on the receiving side.
 	h.SetStreamHandler("/chat/1.0.0", streamHandler)
 
-	// Let's get the actual TCP port from our listen multiaddr, in case we're using 0 (default; random available port).
+	// Let's get the actual UDP port from our listen multiaddr, in case we're using 0 (default; random available port).
 	var port string
 	for _, la := range h.Network().ListenAddresses() {
-		if p, err := la.ValueForProtocol(multiaddr.P_TCP); err == nil {
+		if p, err := la.ValueForProtocol(multiaddr.P_UDP); err == nil {
 			port = p
 			break
 		}
@@ -200,7 +221,7 @@ func startPeer(ctx context.Context, h host.Host, streamHandler network.StreamHan
 		return
 	}
 
-	log.Printf("Run './chat -d /ip4/127.0.0.1/tcp/%v/p2p/%s' on another console.\n", port, h.ID().Pretty())
+	log.Printf("Run './chat -d /ip4/127.0.0.1/udp/%v/quic-v1/p2p/%s' on another console.\n", port, h.ID().Pretty())
 	log.Println("You can replace 127.0.0.1 with public IP as well.")
 	log.Println("Waiting for incoming connection")
 	log.Println()
