@@ -28,18 +28,23 @@
 
 package main
 
+/*
+#include <stdlib.h>
+typedef const char* (*str_callback)(char*);
+extern const char* bridge_str_callback(char* s, str_callback f);
+*/
 import "C"
+import "unsafe"
 
 import (
 	"bufio"
 	"context"
 	"crypto/rand"
-	"flag"
 	"fmt"
 	"io"
 	"log"
 	mrand "math/rand"
-	"os"
+	// "os"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -63,6 +68,13 @@ func handleStream(s network.Stream) {
 	// stream 's' will stay open until you close it (or the other side closes it).
 }
 
+var printCallback C.str_callback 
+
+//export setPrintCallback
+func setPrintCallback(callback C.str_callback) {
+	printCallback = callback
+}
+
 func readData(rw *bufio.ReadWriter) {
 	for {
 		str, _ := rw.ReadString('\n')
@@ -71,72 +83,69 @@ func readData(rw *bufio.ReadWriter) {
 			return
 		}
 		if str != "\n" {
-			// Green console colour: 	\x1b[32m
-			// Reset console colour: 	\x1b[0m
-			fmt.Printf("\x1b[32m%s\x1b[0m> ", str)
+			cstr := C.CString(str)
+			defer C.free(unsafe.Pointer(cstr))
+
+			if C.bridge_str_callback(cstr, printCallback) == nil {
+				return
+			}
 		}
 
 	}
 }
 
-func writeData(rw *bufio.ReadWriter) {
-	stdReader := bufio.NewReader(os.Stdin)
+var inputCallback C.str_callback 
 
+//export setInputCallback
+func setInputCallback(callback C.str_callback) {
+	inputCallback = callback
+}
+
+//export setCallback
+func setCallback(callback C.str_callback) {
+	setPrintCallback(callback)
+	setInputCallback(callback)
+}
+
+func writeData(rw *bufio.ReadWriter) {
 	for {
-		fmt.Print("> ")
-		sendData, err := stdReader.ReadString('\n')
-		if err != nil {
-			log.Println(err)
+		cstr := C.bridge_str_callback(nil, inputCallback)
+		if cstr == nil {
 			return
 		}
 
-		rw.WriteString(fmt.Sprintf("%s\n", sendData))
+		rw.WriteString(fmt.Sprintf("%s\n", C.GoString(cstr)))
 		rw.Flush()
 	}
 }
 
 //export run
-func run() {
+func run(sourcePort int, dest string, debug bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	sourcePort := flag.Int("sp", 0, "Source port number")
-	dest := flag.String("d", "", "Destination multiaddr string")
-	help := flag.Bool("help", false, "Display help")
-	debug := flag.Bool("debug", false, "Debug generates the same node ID on every execution")
-
-	flag.Parse()
-
-	if *help {
-		fmt.Printf("This program demonstrates a simple p2p chat application using libp2p\n\n")
-		fmt.Println("Usage: Run './chat -sp <SOURCE_PORT>' where <SOURCE_PORT> can be any port number.")
-		fmt.Println("Now run './chat -d <MULTIADDR>' where <MULTIADDR> is multiaddress of previous listener host.")
-
-		os.Exit(0)
-	}
 
 	// If debug is enabled, use a constant random source to generate the peer ID. Only useful for debugging,
 	// off by default. Otherwise, it uses rand.Reader.
 	var r io.Reader
-	if *debug {
+	if debug {
 		// Use the port number as the randomness source.
 		// This will always generate the same host ID on multiple executions, if the same port number is used.
 		// Never do this in production code.
-		r = mrand.New(mrand.NewSource(int64(*sourcePort)))
+		r = mrand.New(mrand.NewSource(int64(sourcePort)))
 	} else {
 		r = rand.Reader
 	}
 
-	h, err := makeHost(*sourcePort, r)
+	h, err := makeHost(sourcePort, r)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	if *dest == "" {
+	if dest == "" {
 		startPeer(ctx, h, handleStream)
 	} else {
-		rw, err := startPeerAndConnect(ctx, h, *dest)
+		rw, err := startPeerAndConnect(ctx, h, dest)
 		if err != nil {
 			log.Println(err)
 			return
