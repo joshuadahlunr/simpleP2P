@@ -1,6 +1,8 @@
 #include <argparse/argparse.hpp>
 #include <iostream>
 #include <thread>
+#include <filesystem>
+#include <fstream>
 
 extern "C" {
 	#include "libgolib.h"
@@ -11,7 +13,7 @@ extern "C" {
 		if(f == nullptr) return true;
 		return f();
 	}
-	bool bridge_msg_callback(Message* m, msg_callback f) { 
+	bool bridge_msg_callback(Message* m, msg_callback f) {
 		if(f == nullptr) return true;
 		return f(m);
 	}
@@ -43,7 +45,7 @@ bool peerJoined(char* id) {
 }
 
 bool peerLeft(char* id) {
-	std::cout << id << " disconnected!" << std::endl;	
+	std::cout << id << " disconnected!" << std::endl;
 	return true;
 }
 
@@ -57,18 +59,39 @@ bool topicUnsubscribed(int topic) {
 	return true;
 }
 
+bool connected() {
+	std::cout << "connected to the network!\n> " << std::flush;
+	return true;
+}
+
 
 
 struct Args : public argparse::Args {
-	int& sourcePort = kwarg("p,sp", "Source port number").set_default(0);
-	std::string& dest = kwarg("d,destination", "Destination multiaddr string").set_default("");
-	bool& debug = flag("debug", "Debug generates the same node ID on every execution");
+	std::string& keyFile = kwarg("k,keyfile", "File path to the key identity").set_default("id.key");
 };
 
 int main(int argc, char* argv[]) {
 	Args args = argparse::parse<Args>(argc, argv);
 
+	if (!std::filesystem::exists(args.keyFile)) {
+		auto key = generateCKey();
+		std::ofstream fout(args.keyFile);
+		fout.write((const char*)&key.r1, sizeof(key.r1));
+		fout.write(key.r0, key.r1);
+	}
+
+	std::vector<char> key;
+	{
+		std::ifstream fin(args.keyFile);
+		int size;
+		fin.read((char*)&size, sizeof(size));
+		key.resize(size);
+		fin.read(key.data(), key.size());
+	}
+
+
 	setMessageCallback(print);
+	setConnectedCallback(connected);
 
 	setPeerConnectedCallback(peerJoined);
 	setPeerDisconnectedCallback(peerLeft);
@@ -76,9 +99,11 @@ int main(int argc, char* argv[]) {
 	setTopicSubscribedCallback(topicSubscribed);
 	setTopicUnsubscribedCallback(topicUnsubscribed);
 
-	std::string_view topic = "chat/debug/v1.0.3";
+
+
+	std::string_view topic = "chat/debug/v1.0.0";
 	std::string_view listen = "/ip4/0.0.0.0/udp/0/quic-v1";
-	auto id = initialize({topic.data(), (long)topic.size()}, {listen.data(), (long)listen.size()});
+	auto id = initialize({listen.data(), (long)listen.size()}, {topic.data(), (long)topic.size()}, {key.data(), (long)key.size()}, false);
 
 	std::cout << "listening to topic: " << id << std::endl;
 

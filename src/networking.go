@@ -26,12 +26,14 @@ extern bool bridge_topic_callback(int t, topic_callback f);
 import "C"
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"sync"
 	"time"
 	"unsafe"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -106,23 +108,58 @@ type Topic struct {
 }
 
 type State struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	host   host.Host
-	dht    *dht.IpfsDHT
-	ps     *pubsub.PubSub
-	topics map[int]Topic
+	verbose bool
+	ctx     context.Context
+	cancel  context.CancelFunc
+	host    host.Host
+	dht     *dht.IpfsDHT
+	ps      *pubsub.PubSub
+	topics  map[int]Topic
 }
 
 var state State
 
+//export generateCKey
+func generateCKey() (*C.char, C.int) {
+	str := string(generateKey())
+	return C.CString(str), C.int(len(str))
+}
+
+func generateKey() []byte {
+	privKey, _, err := crypto.GenerateECDSAKeyPair(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+
+	keyBytes, err := crypto.MarshalPrivateKey(privKey)
+	if err != nil {
+		panic(err)
+	}
+
+	return keyBytes
+}
+
 //export initialize
-func initialize(discoveryTopic string, listenAddress string) int {
+func initialize(listenAddress string, discoveryTopic string, keyString string, verbose bool) int {
+	state.verbose = verbose
+
 	ctx, cancel := context.WithCancel(context.Background())
 	state.ctx = ctx
 	state.cancel = cancel
 
-	h, err := libp2p.New(libp2p.ListenAddrStrings(listenAddress))
+	key := []byte(keyString)
+	if len(key) <= 0 {
+		key = generateKey()
+	}
+
+	privateKey, err := crypto.UnmarshalPrivateKey(key)
+	if err != nil {
+		panic(err)
+	}
+
+	h, err := libp2p.New(
+		libp2p.ListenAddrStrings(listenAddress),
+		libp2p.Identity(privateKey))
 	if err != nil {
 		panic(err)
 	}
@@ -165,6 +202,9 @@ func localID() *C.char {
 func subscribeToTopic(name string) int {
 	id := len(state.topics)
 	if _, ok := state.topics[id]; ok {
+		if state.verbose {
+			fmt.Println("Failed to find topic: " + name)
+		}
 		return -1
 	}
 
@@ -234,7 +274,7 @@ func broadcastMessage(message string, topicID int) bool {
 		return false
 	}
 
-	if err := state.topics[topicID].topic.Publish(state.ctx, []byte(message)); err != nil {
+	if err := state.topics[topicID].topic.Publish(state.ctx, []byte(message)); err != nil && state.verbose {
 		fmt.Println("### Publish error:", err)
 		return false
 	}
@@ -260,7 +300,7 @@ func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := h.Connect(ctx, *peerinfo); err != nil {
+			if err := h.Connect(ctx, *peerinfo); err != nil && state.verbose {
 				fmt.Println("Bootstrap warning:", err)
 			}
 		}()
@@ -294,17 +334,21 @@ func discoverPeers(ctx context.Context, h host.Host, advertisingTopic string) {
 				}
 				err := h.Connect(ctx, peer)
 				if err != nil {
-					// fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+					if state.verbose {
+						fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+					}
 				} else {
-					// fmt.Println("Connected to:", peer.ID.Pretty())
+					if state.verbose {
+						fmt.Println("Connected to:", peer.ID.Pretty())
+					}
 					anyConnected = true
 				}
 			}()
 		}
 		wg.Wait()
 	}
+	fmt.Println("Peer discovery complete!")
 	C.bridge_void_callback(connectedCallback)
-	fmt.Println("Peer discovery complete")
 }
 
 func trackPeers(ctx context.Context) {
@@ -398,9 +442,6 @@ func reciever(ctx context.Context, sub *pubsub.Subscription) {
 		if !C.bridge_msg_callback(&msg, messageCallback) {
 			panic("Failed to pass message to C!")
 		}
-
-		// cWrite(string(m.Message.Data))
-		// fmt.Println(m.Message.From, ": ", string(m.Message.Data))
 	}
 }
 
