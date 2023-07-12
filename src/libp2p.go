@@ -101,12 +101,14 @@ func setDisconnectedCallback(callback C.void_callback) {
 
  */
 
+// Topic represents a pubsub topic
 type Topic struct {
 	name         string
 	topic        *pubsub.Topic
 	subscription *pubsub.Subscription
 }
 
+// State represents the state of the application
 type State struct {
 	verbose bool
 	ctx     context.Context
@@ -114,17 +116,20 @@ type State struct {
 	host    host.Host
 	dht     *dht.IpfsDHT
 	ps      *pubsub.PubSub
-	topics  map[int]Topic
+	topics  map[int]Topic // Maps a topicID to the above topic struct
 }
 
 var state State
 
+// generateCKey exports a cryptographic key to C
+//
 //export generateCKey
 func generateCKey() (*C.char, C.int) {
 	str := string(generateKey())
 	return C.CString(str), C.int(len(str))
 }
 
+// generateKey generates a new cryptographic key
 func generateKey() []byte {
 	privKey, _, err := crypto.GenerateECDSAKeyPair(rand.Reader)
 	if err != nil {
@@ -139,6 +144,8 @@ func generateKey() []byte {
 	return keyBytes
 }
 
+// initialize starts up a connection to the p2p network and initializes some library state
+//
 //export initialize
 func initialize(listenAddress string, discoveryTopic string, keyString string, verbose bool) int {
 	state.verbose = verbose
@@ -179,6 +186,8 @@ func initialize(listenAddress string, discoveryTopic string, keyString string, v
 	return subscribeToTopic(discoveryTopic)
 }
 
+// shutdown shuts down the library
+//
 //export shutdown
 func shutdown() {
 	state.cancel()
@@ -193,11 +202,15 @@ func shutdown() {
 	}
 }
 
+// localID returns the hashes ID of the current node
+//
 //export localID
 func localID() *C.char {
 	return C.CString(state.host.ID().Pretty())
 }
 
+// subscribeToTopic subscribes to a topic and begins listening to messages sent within it
+//
 //export subscribeToTopic
 func subscribeToTopic(name string) int {
 	id := len(state.topics)
@@ -220,7 +233,6 @@ func subscribeToTopic(name string) int {
 
 	state.topics[id] = Topic{name: name, topic: topic, subscription: sub}
 
-	// go broadcaster(state.ctx, state.topics[id].topic)
 	go reciever(state.ctx, state.topics[id].subscription)
 	if !C.bridge_topic_callback(C.int(id), topicSubscribedCallback) {
 		panic("C error!")
@@ -228,6 +240,8 @@ func subscribeToTopic(name string) int {
 	return id
 }
 
+// findTopic finds a topicID by name
+//
 //export findTopic
 func findTopic(name string) int {
 	for id, topic := range state.topics {
@@ -239,6 +253,8 @@ func findTopic(name string) int {
 	return -1
 }
 
+// topicString returns the name of a topic given its TopicID
+//
 //export topicString
 func topicString(topicID int) *C.char {
 	if t, ok := state.topics[topicID]; ok {
@@ -247,6 +263,8 @@ func topicString(topicID int) *C.char {
 	return nil
 }
 
+// leaveTopic leaves a topic and stops listening to its messages
+//
 //export leaveTopic
 func leaveTopic(id int) bool {
 	if _, ok := state.topics[id]; !ok {
@@ -268,6 +286,8 @@ func leaveTopic(id int) bool {
 	return true
 }
 
+// broadcastMessage broadcasts a message to all other peers listening to a topic
+//
 //export broadcastMessage
 func broadcastMessage(message string, topicID int) bool {
 	if t, ok := state.topics[topicID]; !ok || t.topic == nil {
@@ -282,6 +302,7 @@ func broadcastMessage(message string, topicID int) bool {
 	return true
 }
 
+// initDHT initializes the DHT used to find peers
 func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
@@ -310,6 +331,7 @@ func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
 	return kademliaDHT
 }
 
+// discoverPeers discovers peers and establishes connections to them
 func discoverPeers(ctx context.Context, h host.Host, advertisingTopic string) {
 	kademliaDHT := initDHT(ctx, h)
 	state.dht = kademliaDHT
@@ -351,6 +373,7 @@ func discoverPeers(ctx context.Context, h host.Host, advertisingTopic string) {
 	C.bridge_void_callback(connectedCallback)
 }
 
+// trackPeers tracks connected and disconnected peers and fires events when peers connect or disconnect
 func trackPeers(ctx context.Context) {
 	connectedPeers := make(map[peer.ID]struct{})
 
@@ -402,6 +425,7 @@ func trackPeers(ctx context.Context) {
 	}
 }
 
+// containsPeer checks if a peer exists in a list of peers
 func containsPeer(peers []peer.ID, target peer.ID) bool {
 	for _, p := range peers {
 		if p == target {
@@ -411,6 +435,7 @@ func containsPeer(peers []peer.ID, target peer.ID) bool {
 	return false
 }
 
+// reciever receives messages from a subscription
 func reciever(ctx context.Context, sub *pubsub.Subscription) {
 	for {
 		m, err := sub.Next(ctx)
@@ -445,4 +470,5 @@ func reciever(ctx context.Context, sub *pubsub.Subscription) {
 	}
 }
 
+// Dummy needed for CGO to properly work!
 func main() {}

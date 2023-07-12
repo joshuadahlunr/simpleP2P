@@ -4,37 +4,17 @@
 #include <filesystem>
 #include <fstream>
 
-extern "C" {
-	#include "libgolib.h"
-}
+#include "simplep2p.h"
 
-extern "C" {
-	bool bridge_void_callback(void_callback f) {
-		if(f == nullptr) return true;
-		return f();
-	}
-	bool bridge_msg_callback(Message* m, msg_callback f) {
-		if(f == nullptr) return true;
-		return f(m);
-	}
-	bool bridge_peer_callback(char* p, peer_callback f) {
-		if(f == nullptr) return true;
-		return f(p);
-	}
-	bool bridge_topic_callback(int t, topic_callback f){
-		if(f == nullptr) return true;
-		return f(t);
-	}
-}
 
-bool print(Message* message) {
-	if(std::string_view(message->recieved_from) == std::string_view(localID()))
+bool print(P2PMessage* message) {
+	if(std::string_view(message->received_from) == std::string_view(p2p_local_id()))
 		// std::cout << "from us";
 		return true;
 
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
-	std::cout << "\x1b[32m" << message->recieved_from << ": " << message->data << "\n\x1b[0m> " << std::flush;
+	std::cout << "\x1b[32m" << message->received_from << ": " << message->data << "\n\x1b[0m> " << std::flush;
 	return true;
 }
 
@@ -74,10 +54,10 @@ int main(int argc, char* argv[]) {
 	Args args = argparse::parse<Args>(argc, argv);
 
 	if (!std::filesystem::exists(args.keyFile)) {
-		auto key = generateCKey();
+		auto key = p2p_generate_key();
 		std::ofstream fout(args.keyFile);
-		fout.write((const char*)&key.r1, sizeof(key.r1));
-		fout.write(key.r0, key.r1);
+		fout.write((const char*)&key.data, sizeof(key.size));
+		fout.write(key.data, key.size);
 	}
 
 	std::vector<char> key;
@@ -90,30 +70,26 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	setMessageCallback(print);
-	setConnectedCallback(connected);
+	p2p_set_message_callback(print);
+	p2p_set_connected_callback(connected);
 
-	setPeerConnectedCallback(peerJoined);
-	setPeerDisconnectedCallback(peerLeft);
+	p2p_set_peer_connected_callback(peerJoined);
+	p2p_set_peer_disconnected_callback(peerLeft);
 
-	setTopicSubscribedCallback(topicSubscribed);
-	setTopicUnsubscribedCallback(topicUnsubscribed);
+	p2p_set_topic_subscribed_callback(topicSubscribed);
+	p2p_set_topic_unsubscribed_callback(topicUnsubscribed);
 
 
 
 	std::string_view topic = "chat/debug/v1.0.0";
 	std::string_view listen = "/ip4/0.0.0.0/udp/0/quic-v1";
-	auto id = initialize({listen.data(), (long)listen.size()}, {topic.data(), (long)topic.size()}, {key.data(), (long)key.size()}, false);
-
-	std::cout << "listening to topic: " << id << std::endl;
+	auto id = p2p_initialize(p2p_initialize_args_from_strings("/ip4/0.0.0.0/udp/0/quic-v1", "chat/debug/v1.0.0", {key.data(), (int)key.size()}, false));
 
 	std::string line;
 	while(true){
 		std::cout << "> " << std::flush;
 		std::getline(std::cin, line);
 
-		bool success = broadcastMessage({line.data(), (long)line.size()}, id);
+		bool success = p2p_broadcast_messagen(line.data(), line.size(), id);
 	}
-
-	std::cout << "Will this ever run?" << std::endl;
 }
