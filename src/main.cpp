@@ -7,41 +7,55 @@ extern "C" {
 }
 
 extern "C" {
-	const char* bridge_str_callback(char* s, str_callback f) { 
-		return f(s);
+	bool bridge_void_callback(void_callback f) {
+		if(f == nullptr) return true;
+		return f();
+	}
+	bool bridge_msg_callback(Message* m, msg_callback f) { 
+		if(f == nullptr) return true;
+		return f(m);
+	}
+	bool bridge_peer_callback(char* p, peer_callback f) {
+		if(f == nullptr) return true;
+		return f(p);
+	}
+	bool bridge_topic_callback(int t, topic_callback f){
+		if(f == nullptr) return true;
+		return f(t);
 	}
 }
 
-// std::string line;
-// const char* input(char* _) {
-// 	std::cout << "> " << std::flush;
-// 	std::getline(std::cin, line);
+bool print(Message* message) {
+	if(std::string_view(message->recieved_from) == std::string_view(localID()))
+		// std::cout << "from us";
+		return true;
 
-// 	return line.c_str();
-// }
-
-const char* print(char* message) {
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
-	std::cout << "\x1b[32m" << message << "\n\x1b[0m> " << std::flush;
-	return "good";
+	std::cout << "\x1b[32m" << message->recieved_from << ": " << message->data << "\n\x1b[0m> " << std::flush;
+	return true;
 }
 
-// const char* callback(char* message) {
-// 	if(message) { // We should print something...
-// 		// Green console colour: 	\x1b[32m
-// 		// Reset console colour: 	\x1b[0m
-// 		std::cout << "\x1b[32m" << message << "\x1b[0m> " << std::flush;
-// 		return "good";
-	
-// 	// Otherwise... we need to read something!
-// 	} else {
-// 		std::cout << "> " << std::flush;
-// 		std::getline(std::cin, line);
 
-// 		return line.c_str();
-// 	}
-// }
+bool peerJoined(char* id) {
+	std::cout << id << " connected!" << std::endl;
+	return true;
+}
+
+bool peerLeft(char* id) {
+	std::cout << id << " disconnected!" << std::endl;	
+	return true;
+}
+
+bool topicSubscribed(int topic) {
+	std::cout << "subscribed to topic " << topic << std::endl;
+	return true;
+}
+
+bool topicUnsubscribed(int topic) {
+	std::cout << "unsubscribed to topic " << topic << std::endl;
+	return true;
+}
 
 
 
@@ -54,10 +68,17 @@ struct Args : public argparse::Args {
 int main(int argc, char* argv[]) {
 	Args args = argparse::parse<Args>(argc, argv);
 
-	setPrintCallback(print);
+	setMessageCallback(print);
 
-	std::string_view s = "chat/v1.0.1";
-	auto id = initialize({s.data(), (long)s.size()}, true, 0);
+	setPeerConnectedCallback(peerJoined);
+	setPeerDisconnectedCallback(peerLeft);
+
+	setTopicSubscribedCallback(topicSubscribed);
+	setTopicUnsubscribedCallback(topicUnsubscribed);
+
+	std::string_view topic = "chat/debug/v1.0.3";
+	std::string_view listen = "/ip4/0.0.0.0/udp/0/quic-v1";
+	auto id = initialize({topic.data(), (long)topic.size()}, {listen.data(), (long)listen.size()});
 
 	std::cout << "listening to topic: " << id << std::endl;
 
