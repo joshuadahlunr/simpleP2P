@@ -110,13 +110,14 @@ type Topic struct {
 
 // State represents the state of the application
 type State struct {
-	verbose bool
-	ctx     context.Context
-	cancel  context.CancelFunc
-	host    host.Host
-	dht     *dht.IpfsDHT
-	ps      *pubsub.PubSub
-	topics  map[int]Topic // Maps a topicID to the above topic struct
+	verbose           bool
+	connectionTimeout float64
+	ctx               context.Context
+	cancel            context.CancelFunc
+	host              host.Host
+	dht               *dht.IpfsDHT
+	ps                *pubsub.PubSub
+	topics            map[int]Topic // Maps a topicID to the above topic struct
 }
 
 var state State
@@ -147,8 +148,9 @@ func generateKey() []byte {
 // initialize starts up a connection to the p2p network and initializes some library state
 //
 //export initialize
-func initialize(listenAddress string, discoveryTopic string, keyString string, verbose bool) int {
+func initialize(listenAddress string, discoveryTopic string, keyString string, connectionTimeout float64, verbose bool) int {
 	state.verbose = verbose
+	state.connectionTimeout = connectionTimeout
 
 	ctx, cancel := context.WithCancel(context.Background())
 	state.ctx = ctx
@@ -332,7 +334,9 @@ func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
 }
 
 // discoverPeers discovers peers and establishes connections to them
-func discoverPeers(ctx context.Context, h host.Host, advertisingTopic string) {
+func discoverPeers(inCTX context.Context, h host.Host, advertisingTopic string) {
+	ctx, cancel := context.WithTimeout(inCTX, time.Duration(state.connectionTimeout*float64(time.Second)))
+	defer cancel()
 	kademliaDHT := initDHT(ctx, h)
 	state.dht = kademliaDHT
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
@@ -341,34 +345,40 @@ func discoverPeers(ctx context.Context, h host.Host, advertisingTopic string) {
 	// Look for others who have announced and attempt to connect to them
 	anyConnected := false
 	for !anyConnected {
-		fmt.Println("Searching for peers...")
-		peerChan, err := routingDiscovery.FindPeers(ctx, advertisingTopic)
-		if err != nil {
-			panic(err)
-		}
-		var wg sync.WaitGroup
-		for peer := range peerChan {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if peer.ID == h.ID() {
-					return // No self connection
-				}
-				err := h.Connect(ctx, peer)
-				if err != nil {
-					if state.verbose {
-						fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+		select {
+		case <-ctx.Done():
+			panic("Failed to find peers!")
+		default:
+			fmt.Println("Searching for peers...")
+			peerChan, err := routingDiscovery.FindPeers(ctx, advertisingTopic)
+			if err != nil {
+				panic(err)
+			}
+			var wg sync.WaitGroup
+			for peer := range peerChan {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if peer.ID == h.ID() {
+						return // No self connection
 					}
-				} else {
-					if state.verbose {
-						fmt.Println("Connected to:", peer.ID.Pretty())
+					err := h.Connect(ctx, peer)
+					if err != nil {
+						if state.verbose {
+							fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+						}
+					} else {
+						if state.verbose {
+							fmt.Println("Connected to:", peer.ID.Pretty())
+						}
+						anyConnected = true
 					}
-					anyConnected = true
-				}
-			}()
+				}()
+			}
+			wg.Wait()
 		}
-		wg.Wait()
 	}
+
 	fmt.Println("Peer discovery complete!")
 	C.bridge_void_callback(connectedCallback)
 }

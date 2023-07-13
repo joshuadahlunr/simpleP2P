@@ -82,6 +82,7 @@ typedef struct {
 	const char* discoveryTopic;         ///< The discovery topic.
 	long long discoveryTopicSize;       ///< The size of the discovery topic.
 	P2PKey identity;                    ///< The P2P key identity.
+	double connectionTimeout;			///< The time in seconds to try connecting before giving up
 	bool verbose;                       ///< The verbose flag.
 } P2PInitializationArguments;
 
@@ -102,10 +103,11 @@ P2PInitializationArguments p2p_default_initialize_args();
  * @param listenAddress The listen address string.
  * @param discoveryTopic The discovery topic string.
  * @param identity The P2P key identity.
+ * @param connectionTimeout The time (in seconds) to wait for a connection before giving up.
  * @param verbose The verbose flag.
  * @return The initialization arguments.
  */
-P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAddress, const char* discoveryTopic, P2PKey identity, bool verbose);
+P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAddress, const char* discoveryTopic, P2PKey identity, double connectionTimeout, bool verbose);
 
 /**
  * @brief Initializes P2P network with the provided arguments.

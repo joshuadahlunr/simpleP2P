@@ -9,6 +9,8 @@
 #include <iostream>
 #include <vector>
 #include <optional>
+#include <chrono>
+
 
 namespace p2p {
 	/**
@@ -215,6 +217,7 @@ namespace p2p {
 		 * @param discoveryTopic The discovery topic for network initialization.
 		 * @param identityKey The identity key for network initialization.
 		 * @param do_on_connected Callback function to register in on_connected before initializing the connection
+		 * @param connectionTimeout The time to wait for a connection before giving up.
 		 * @param verbose Flag indicating if the GO library should spew some more verbose messages.
 		 */
 		Network(
@@ -222,6 +225,7 @@ namespace p2p {
 			std::string_view discoveryTopic = default_discovery_topic,
 			const Key& identityKey = {},
 			delegate_function<void()> do_on_connected = nullptr,
+			std::chrono::milliseconds connectionTimeout = std::chrono::seconds(60),
 			bool verbose = false
 		) {
 			singleton = this;
@@ -229,7 +233,7 @@ namespace p2p {
 			if(do_on_connected != nullptr)
 				on_connected = do_on_connected;
 
-			initialize(listenAddress, discoveryTopic, identityKey, verbose);
+			initialize(listenAddress, discoveryTopic, identityKey, connectionTimeout, verbose);
 		}
 
 		/**
@@ -258,12 +262,14 @@ namespace p2p {
 		 * @param listenAddress The multiaddress we should listen for connections on.
 		 * @param discoveryTopic The discovery topic for network initialization.
 		 * @param identityKey The identity key for network initialization.
+		 * @param connectionTimeout The time to wait for a connection before giving up.
 		 * @param verbose Flag indicating if the GO library should spew some more verbose messages.
 		 */
 		void initialize(
 			std::string_view listenAddress = default_listen_address,
 			std::string_view discoveryTopic = default_discovery_topic,
 			const Key& identityKey = {},
+			std::chrono::milliseconds connectionTimeout = std::chrono::seconds(60),
 			bool verbose = false
 		) {
 			// Connect the delegates to the callbacks
@@ -282,6 +288,7 @@ namespace p2p {
 				.discoveryTopic = discoveryTopic.data(),
 				.discoveryTopicSize = (long long)discoveryTopic.size(),
 				.identity = identityKey,
+				.connectionTimeout = std::chrono::duration_cast<std::chrono::duration<double>>(connectionTimeout).count(),
 				.verbose = verbose
 			})};
 		}

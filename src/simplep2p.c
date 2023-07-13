@@ -187,6 +187,7 @@ P2PInitializationArguments p2p_default_initialize_args() {
 	out.discoveryTopic = "simpleP2P";
 	out.discoveryTopicSize = strlen(out.discoveryTopic);
 	out.identity = p2p_null_key();
+	out.connectionTimeout = 60 /*seconds*/;
 	out.verbose = false;
 	return out;
 }
@@ -199,16 +200,18 @@ P2PInitializationArguments p2p_default_initialize_args() {
  * @param listenAddress The listen address string.
  * @param discoveryTopic The discovery topic string.
  * @param identity The P2P key identity.
+ * @param connectionTimeout The time (in seconds) to wait for a connection before giving up.
  * @param verbose The verbose flag.
  * @return The initialization arguments.
  */
-P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAddress, const char* discoveryTopic, P2PKey identity, bool verbose) {
+P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAddress, const char* discoveryTopic, P2PKey identity, double connectionTimeout, bool verbose) {
 	P2PInitializationArguments out;
 	out.listenAddress = listenAddress;
 	out.listenAddressSize = strlen(out.listenAddress);
 	out.discoveryTopic = discoveryTopic;
 	out.discoveryTopicSize = strlen(out.discoveryTopic);
 	out.identity = identity;
+	out.connectionTimeout = connectionTimeout;
 	out.verbose = verbose;
 	return out;
 }
@@ -231,7 +234,7 @@ P2PTopic p2p_initialize(P2PInitializationArguments args) {
 	GoString key;
 	key.p = args.identity.data;
 	key.n = args.identity.size;
-	return initialize(listenAddress, discoveryTopic, key, args.verbose);
+	return initialize(listenAddress, discoveryTopic, key, args.connectionTimeout, args.verbose);
 }
 
 /**
