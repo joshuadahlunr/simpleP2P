@@ -4,44 +4,39 @@
 #include <filesystem>
 #include <fstream>
 
-#include "simplep2p.h"
+#define SIMPLE_P2P_IMPLEMENTATION
+#include "simplep2p.hpp"
 
 
-bool print(P2PMessage* message) {
-	if(std::string_view(message->received_from) == std::string_view(p2p_local_id()))
-		// std::cout << "from us";
-		return true;
+void print(p2p::Message& message) {
+	if(message.is_local())
+		return;
 
 	// Green console colour: 	\x1b[32m
 	// Reset console colour: 	\x1b[0m
-	std::cout << "\x1b[32m" << message->received_from << ": " << message->data << "\n\x1b[0m> " << std::flush;
-	return true;
+	std::cout << "\x1b[32m" << message.sender() << ": " << message.data_string() << "\n\x1b[0m> " << std::flush;
 }
 
 
-bool peerJoined(char* id) {
+void peerJoined(std::string_view id) {
 	std::cout << id << " connected!" << std::endl;
-	return true;
 }
 
-bool peerLeft(char* id) {
+void peerLeft(std::string_view id) {
 	std::cout << id << " disconnected!" << std::endl;
-	return true;
 }
 
-bool topicSubscribed(int topic) {
-	std::cout << "subscribed to topic " << topic << std::endl;
-	return true;
+void topicSubscribed(p2p::Topic topic) {
+	std::cout << "subscribed to topic " << topic.id << " aka. " << topic.name() << std::endl;
 }
 
-bool topicUnsubscribed(int topic) {
-	std::cout << "unsubscribed to topic " << topic << std::endl;
-	return true;
+void topicUnsubscribed(p2p::Topic topic) {
+	std::cout << "unsubscribed to topic " << topic.id << " aka. " << topic.name() << std::endl;
 }
 
-bool connected() {
+void connected() {
+	topicSubscribed(p2p::Network::get_singleton().defaultTopic);
 	std::cout << "connected to the network!\n> " << std::flush;
-	return true;
 }
 
 
@@ -53,43 +48,33 @@ struct Args : public argparse::Args {
 int main(int argc, char* argv[]) {
 	Args args = argparse::parse<Args>(argc, argv);
 
+	p2p::Key key;
 	if (!std::filesystem::exists(args.keyFile)) {
-		auto key = p2p_generate_key();
+		key = p2p::Key::generate();
 		std::ofstream fout(args.keyFile);
-		fout.write((const char*)&key.data, sizeof(key.size));
-		fout.write(key.data, key.size);
+		key.save(fout);
 	}
 
-	std::vector<char> key;
 	{
 		std::ifstream fin(args.keyFile);
-		int size;
-		fin.read((char*)&size, sizeof(size));
-		key.resize(size);
-		fin.read(key.data(), key.size());
+		key.load(fin);
 	}
 
+	p2p::Network net(p2p::default_listen_address, "chat/debug/v1.0.0", key, connected);
 
-	p2p_set_message_callback(print);
-	p2p_set_connected_callback(connected);
+	net.on_message += print;
 
-	p2p_set_peer_connected_callback(peerJoined);
-	p2p_set_peer_disconnected_callback(peerLeft);
+	net.on_peer_connected += peerJoined;
+	net.on_peer_disconnected += peerLeft;
 
-	p2p_set_topic_subscribed_callback(topicSubscribed);
-	p2p_set_topic_unsubscribed_callback(topicUnsubscribed);
-
-
-
-	std::string_view topic = "chat/debug/v1.0.0";
-	std::string_view listen = "/ip4/0.0.0.0/udp/0/quic-v1";
-	auto id = p2p_initialize(p2p_initialize_args_from_strings("/ip4/0.0.0.0/udp/0/quic-v1", "chat/debug/v1.0.0", {key.data(), (int)key.size()}, false));
+	net.on_topic_subscribed += topicSubscribed;
+	net.on_topic_unsubscribed += topicUnsubscribed;
 
 	std::string line;
 	while(true){
 		std::cout << "> " << std::flush;
 		std::getline(std::cin, line);
 
-		bool success = p2p_broadcast_messagen(line.data(), line.size(), id);
+		bool success = net.broadcast_message(line);
 	}
 }
