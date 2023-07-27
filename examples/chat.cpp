@@ -18,11 +18,11 @@ void print(p2p::Message& message) {
 }
 
 
-void peerJoined(std::string_view id) {
+void peerJoined(p2p::PeerID::view id) {
 	std::cout << id << " connected!" << std::endl;
 }
 
-void peerLeft(std::string_view id) {
+void peerLeft(p2p::PeerID::view id) {
 	std::cout << id << " disconnected!" << std::endl;
 }
 
@@ -60,12 +60,12 @@ int main(int argc, char* argv[]) {
 		key.load(fin);
 	}
 
-	p2p::Network net(p2p::default_listen_address, "chat/debug/v1.0.0", key, connected);
+	p2p::Network net(p2p::default_listen_address, "chat/v1.0.0", key, connected);
 
 	net.on_message += print;
 
-	net.on_peer_connected += peerJoined;
-	net.on_peer_disconnected += peerLeft;
+	net.on_peer_connected += peerJoined; // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
+	net.on_peer_disconnected += peerLeft; // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
 
 	net.on_topic_subscribed += topicSubscribed;
 	net.on_topic_unsubscribed += topicUnsubscribed;

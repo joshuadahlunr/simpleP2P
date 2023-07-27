@@ -2,19 +2,37 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 cmake_minimum_required(VERSION 3.12)
 
-project(go-make Go CXX C)
+if(CMAKE_VERSION VERSION_LESS 3.21)
+	get_property(not_top DIRECTORY PROPERTY PARENT_DIRECTORY)
+	if(not_top)
+		set(PROJECT_IS_TOP_LEVEL false)
+	else()
+		set(PROJECT_IS_TOP_LEVEL true)
+	endif()
+endif()
+
+# message(${PROJECT_IS_TOP_LEVEL})
+option(BUILD_EXAMPLES "Build the example applications" ${PROJECT_IS_TOP_LEVEL})
+
+project(simplep2p Go CXX C)
 
 include(cmake/golang.cmake)
 include(cmake/flags.cmake)
 
-add_go_library_with_modules(golib STATIC src/libp2p.go)
+add_go_library_with_modules(simplep2p_golib STATIC src/libp2p.go)
 
 add_library(simplep2p STATIC src/simplep2p.c)
 target_include_directories(simplep2p PUBLIC src)
-target_link_libraries(simplep2p golib)
+target_link_libraries(simplep2p simplep2p_golib)
 
-add_subdirectory(extern/argparse)
+if(BUILD_EXAMPLES)
+	add_subdirectory(examples/argparse)
 
-add_executable(tst src/main.cpp)
-target_link_libraries(tst simplep2p argparse)
-set_property(TARGET tst PROPERTY CXX_STANDARD 20)
+	add_executable(chat examples/chat.cpp)
+	target_link_libraries(chat simplep2p argparse)
+	set_property(TARGET chat PROPERTY CXX_STANDARD 20)
+
+	add_executable(chat.capi examples/chat.capi.cpp)
+	target_link_libraries(chat.capi simplep2p argparse)
+	set_property(TARGET chat.capi PROPERTY CXX_STANDARD 20)
+endif()

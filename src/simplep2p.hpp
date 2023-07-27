@@ -1,7 +1,6 @@
 #ifndef SIMPLE_P2P_NETWORKING_HPP
 #define SIMPLE_P2P_NETWORKING_HPP
 
-#include "simplep2p.h"
 #include "delegate.hpp"
 
 #include <string_view>
@@ -13,6 +12,8 @@
 
 
 namespace p2p {
+	#include "simplep2p.h"
+
 	/**
 	 * @brief Alias equating a PeerID and a string
 	 */

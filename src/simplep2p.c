@@ -1,4 +1,4 @@
-#include "libgolib.h"
+#include "libsimplep2p_golib.h"
 #include "simplep2p.h"
 
 #ifdef __cplusplus

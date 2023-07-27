@@ -3,9 +3,9 @@
 
 #ifdef __cplusplus
 extern "C" {
+#else
+	#include <stdbool.h>
 #endif
-
-#include <stdbool.h>
 
 /**
  * @struct P2PMessage

@@ -163,6 +163,7 @@ func initialize(listenAddress string, discoveryTopic string, keyString string, c
 
 	privateKey, err := crypto.UnmarshalPrivateKey(key)
 	if err != nil {
+		fmt.Println("Failed to unpack identity key!")
 		panic(err)
 	}
 
