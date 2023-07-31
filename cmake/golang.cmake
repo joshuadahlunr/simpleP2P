@@ -1,19 +1,46 @@
 set(GOPATH "${CMAKE_CURRENT_BINARY_DIR}/go")
 file(MAKE_DIRECTORY ${GOPATH})
 
-function(GO_GET TARG)
-  add_custom_target(${TARG} env GOPATH=${GOPATH} ${CMAKE_Go_COMPILER} get ${ARGN})
+function(GO_ENVIORNMENT ret)
+  if(WIN32)
+    set(env "set \"GOPATH=${GOPATH}\" &&")
+  else()
+    set(env "env \"GOPATH=${GOPATH}\"")
+  endif()
+  if(DEFINED GOROOT)
+    if(WIN32)
+      set(env "set \"GOROOT=${GOROOT}\" && ${env}")
+    else()
+      set(env "${env} \"GOROOT=${GOROOT}\"")
+    endif()
+  endif()
+  separate_arguments(env)
+  set(${ret} ${env} PARENT_SCOPE)
+endfunction(GO_ENVIORNMENT)
+
+function(GO_GET TARG MODULE)
+  set(GO_ENV "")
+  GO_ENVIORNMENT(GO_ENV)
+  add_custom_target(${TARG} ${GO_ENV} ${CMAKE_Go_COMPILER} get ${ARGN})
+  add_dependencies(${TARG} ${MODULE})
 endfunction(GO_GET)
+
+function(TARGET_GO_GET_DEPENDENCY LIBRARY NAME TARG PACKAGES)
+  go_get(${TARG} ${LIBRARY}_module ${ARGN})
+  add_dependencies(${LIBRARY} ${TARG})
+endfunction(TARGET_GO_GET_DEPENDENCY)
 
 function(BUILD_GO_MODULE NAME SOURCE_FILE)
   cmake_path(GET SOURCE_FILE FILENAME SOURCE_FILE_NO_PATH)
+  set(GO_ENV "")
+  GO_ENVIORNMENT(GO_ENV)
 
   add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/go.mod
-    COMMAND env GOPATH=${GOPATH} ${CMAKE_Go_COMPILER} mod init ${SOURCE_FILE_NO_PATH}
+    COMMAND  ${GO_ENV} ${CMAKE_Go_COMPILER} mod init ${SOURCE_FILE_NO_PATH}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
   add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/go.sum
-    COMMAND env GOPATH=${GOPATH} ${CMAKE_Go_COMPILER} mod tidy -e
+    COMMAND  ${GO_ENV} ${CMAKE_Go_COMPILER} mod tidy -e
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/go.mod)
 
@@ -21,8 +48,11 @@ function(BUILD_GO_MODULE NAME SOURCE_FILE)
 endfunction(BUILD_GO_MODULE)
 
 function(ADD_GO_EXECUTABLE NAME GO_SOURCE)
+  set(GO_ENV "")
+  GO_ENVIORNMENT(GO_ENV)
+
   add_custom_command(OUTPUT ${OUTPUT_DIR}/.timestamp
-    COMMAND env GOPATH=${GOPATH} ${CMAKE_Go_COMPILER} build
+    COMMAND ${GO_ENV} ${CMAKE_Go_COMPILER} build
     -o "${CMAKE_CURRENT_BINARY_DIR}/${NAME}"
     ${CMAKE_GO_FLAGS} ${GO_SOURCE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR})
@@ -39,6 +69,9 @@ endfunction(ADD_GO_EXECUTABLE_WITH_MODULES)
 
 
 function(ADD_GO_LIBRARY NAME BUILD_TYPE GO_SOURCE)
+  set(GO_ENV "")
+  GO_ENVIORNMENT(GO_ENV)
+
   if(BUILD_TYPE STREQUAL "STATIC")
     set(BUILD_MODE -buildmode=c-archive)
     set(LIB_NAME "lib${NAME}.a")
@@ -54,11 +87,12 @@ function(ADD_GO_LIBRARY NAME BUILD_TYPE GO_SOURCE)
   endif()
 
   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${LIB_NAME}
-    COMMAND env GOPATH=${GOPATH} ${CMAKE_Go_COMPILER} build ${BUILD_MODE}
+    COMMAND ${GO_ENV} ${CMAKE_Go_COMPILER} build ${BUILD_MODE}
       -o "${CMAKE_CURRENT_BINARY_DIR}/${LIB_NAME}"
       ${CMAKE_GO_FLAGS} ${GO_SOURCE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-    DEPENDS ${GO_SOURCE})
+    DEPENDS ${GO_SOURCE}
+)
 
   add_custom_target(${NAME}_internal ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${LIB_NAME})
 
