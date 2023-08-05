@@ -11,6 +11,12 @@ if(CMAKE_VERSION VERSION_LESS 3.21)
 	endif()
 endif()
 
+option(BUILD_EXAMPLES "Build the example applications" ${PROJECT_IS_TOP_LEVEL})
+
+project(simplep2p Go CXX C)
+
+include(cmake/golang.cmake)
+include(cmake/flags.cmake)
 
 # If we are compiling on windows overwrite the GOROOT based on the compiler path
 if(WIN32)
@@ -19,13 +25,6 @@ if(WIN32)
 	cmake_path(ABSOLUTE_PATH GOROOT NORMALIZE)
 	message("Overwriting GOROOT with ${GOROOT}")
 endif()
-
-option(BUILD_EXAMPLES "Build the example applications" ${PROJECT_IS_TOP_LEVEL})
-
-project(simplep2p Go CXX C)
-
-include(cmake/golang.cmake)
-include(cmake/flags.cmake)
 
 add_go_library_with_modules(simplep2p_golib STATIC src/libp2p.go)
 target_go_get_dependency(simplep2p_golib NAME get_libp2p PACKAGES github.com/libp2p/go-libp2p)

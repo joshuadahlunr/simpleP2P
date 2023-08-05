@@ -87,3 +87,5 @@ make # or ninja if your prefer
 ```
 
 **Note that in some cases the go module step will find versioning issues, CMake will identify this as failure and stop the build!** If this happens simply rerun make and the build should finish as normal!
+
+Windows: ![Windows Build Status](https://github.com/joshuadahlunr/simpleP2P/actions/workflows/build-windows.yml/badge.svg?event=push) Linux: ![Linux Build Status](https://github.com/joshuadahlunr/simpleP2P/actions/workflows/build-linux.yml/badge.svg?event=push)
