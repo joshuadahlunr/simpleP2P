@@ -10,9 +10,6 @@ bool print(P2PMessage* message) {
 
 ...
 
-// Specifies that print should be called whenever we recieve a message from the network
-p2p_set_message_callback(print);
-
 // All of the following values are set automatically by calling p2p_default_initialize_args(), then only any deviations from these values need to be specified
 P2PInitializationArguments initInfo;
 // A multiaddress storing both network and transport layer information (this is the address used by default)
@@ -29,13 +26,16 @@ initInfo.connectionTimeout = 60;
 initInfo.verbose = false; 
 
 // This function will block until a connection is established (or the timeout elapses) the networking will occur on a seperate thread which can be stopped by calling p2p_shutdown()
-P2PTopic defaultTopic = p2p_initialize(initInfo);
-// if (defaultTopic < 0) an error has occured! (this function will block)
+P2PNetwork network = p2p_initialize(initInfo);
+// if (network < 0) an error has occured! (this function will block)
+
+// Specifies that print should be called whenever we recieve a message from the network
+p2p_set_message_callback(network, print);
 
 ...
 
 // Sends a message to every connected peer (including ourself)
-p2p_broadcast_message("Hello World!", defaultTopic);
+p2p_broadcast_message(network, "Hello World!", defaultTopic);
 // or p2p_broadcast_messagen(data, size, topic); to avoid a call to strlen
 ```
 
@@ -49,7 +49,7 @@ Additional callbacks are provided for other events such as network connection an
 A C++ wrapper is also provided! The above C example can be reproduced as follows:
 
 ```cpp
-void print(p2p::Message& message) {
+void print(p2p::Network& network, p2p::Message& message) {
     std::cout << "Sender " << message.sender() << ": " << message.data_string() << std::endl;
 }
 
@@ -63,7 +63,7 @@ net.on_message.subscribe(print); // The += operator can be used as well
 ...
 
 // NOTE: The network will automatically track the default topic
-p2p::Network::get_singleton().broadcast_message("Hello World!");
+net.broadcast_message("Hello World!");
 ```
 
 See the [chat.cpp](https://github.com/joshuadahlunr/simpleP2P/blob/master/examples/chat.cpp) example and [documentation](https://github.com/joshuadahlunr/simpleP2P/wiki/Cpp-API) for more details!
@@ -75,7 +75,7 @@ SimpleP2P has no other C++ library dependencies, it is also setup to automaticll
 -> C/++ Compiler (supporting C++ 20 [specifically std::span] if the C++ wrapper is used)
 -> GO Compiler >= 1.19
 
-SimpleP2p supports being added as subdirectory and will provide the `simplep2p` target your project can link against.
+SimpleP2P supports being added as subdirectory and will provide the `simplep2p` target your project can link against (includes both the C and C++ APIs).
 
 You can also build the sample chat application by running
 ```bash

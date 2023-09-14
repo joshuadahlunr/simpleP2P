@@ -15,9 +15,9 @@ extern "C" {
  * @param f The void callback function to bridge.
  * @return True if everything went well, False if Go should panic
  */
-bool bridge_void_callback(void_callback f) {
+bool bridge_void_callback(P2PNetwork n, void_callback f) {
 	if(f == NULL) return true;
-	return f();
+	return f(n);
 }
 
 /**
@@ -29,9 +29,9 @@ bool bridge_void_callback(void_callback f) {
  * @param f The message callback function to bridge.
  * @return True if everything went well, False if Go should panic
  */
-bool bridge_msg_callback(Message* m, msg_callback f) {
+bool bridge_msg_callback(P2PNetwork n, Message* m, msg_callback f) {
 	if(f == NULL) return true;
-	return f(m);
+	return f(n, m);
 }
 
 /**
@@ -43,9 +43,9 @@ bool bridge_msg_callback(Message* m, msg_callback f) {
  * @param f The peer callback function to bridge.
  * @return True if everything went well, False if Go should panic
  */
-bool bridge_peer_callback(char* p, peer_callback f) {
+bool bridge_peer_callback(P2PNetwork n, char* p, peer_callback f) {
 	if(f == NULL) return true;
-	return f(p);
+	return f(n, p);
 }
 
 /**
@@ -57,9 +57,9 @@ bool bridge_peer_callback(char* p, peer_callback f) {
  * @param f The topic callback function to bridge.
  * @return True if everything went well, False if Go should panic
  */
-bool bridge_topic_callback(int t, topic_callback f){
+bool bridge_topic_callback(P2PNetwork n, int t, topic_callback f){
 	if(f == NULL) return true;
-	return f(t);
+	return f(n, t);
 }
 
 /**
@@ -68,10 +68,11 @@ bool bridge_topic_callback(int t, topic_callback f){
  * This function sets the message callback function for P2P network. It bridges the provided callback function from C to Go.
  *
  * @note the data passed to the callback is freed as soon as this returns... if you need it to stick around longer you must copy it!
+ * @param network The network to manipulate.
  * @param callback The message callback function to set.
  */
-void p2p_set_message_callback(P2PMsgCallback callback) {
-	setMessageCallback((msg_callback)callback);
+void p2p_set_message_callback(P2PNetwork network, P2PMsgCallback callback) {
+	setMessageCallback(network, (msg_callback)callback);
 }
 
 /**
@@ -80,10 +81,11 @@ void p2p_set_message_callback(P2PMsgCallback callback) {
  * This function sets the peer connected callback function for P2P network. It bridges the provided callback function from C to Go.
  *
  * @note the data passed to the callback is freed as soon as this returns... if you need it to stick around longer you must copy it!
+ * @param network The network to manipulate.
  * @param callback The peer connected callback function to set.
  */
-void p2p_set_peer_connected_callback(P2PPeerCallback callback) {
-	setPeerConnectedCallback((peer_callback)callback);
+void p2p_set_peer_connected_callback(P2PNetwork network, P2PPeerCallback callback) {
+	setPeerConnectedCallback(network, (peer_callback)callback);
 }
 
 /**
@@ -92,10 +94,11 @@ void p2p_set_peer_connected_callback(P2PPeerCallback callback) {
  * This function sets the peer disconnected callback function for P2P network. It bridges the provided callback function from C to Go.
  *
  * @note the data passed to the callback is freed as soon as this returns... if you need it to stick around longer you must copy it!
+ * @param network The network to manipulate.
  * @param callback The peer disconnected callback function to set.
  */
-void p2p_set_peer_disconnected_callback(P2PPeerCallback callback) {
-	setPeerDisconnectedCallback(callback);
+void p2p_set_peer_disconnected_callback(P2PNetwork network, P2PPeerCallback callback) {
+	setPeerDisconnectedCallback(network, callback);
 }
 
 /**
@@ -103,10 +106,11 @@ void p2p_set_peer_disconnected_callback(P2PPeerCallback callback) {
  *
  * This function sets the topic subscribed callback function for P2P network. It bridges the provided callback function from C to Go.
  *
+ * @param network The network to manipulate.
  * @param callback The topic subscribed callback function to set.
  */
-void p2p_set_topic_subscribed_callback(P2PTopicCallback callback) {
-	setTopicSubscribedCallback(callback);
+void p2p_set_topic_subscribed_callback(P2PNetwork network, P2PTopicCallback callback) {
+	setTopicSubscribedCallback(network, callback);
 }
 
 /**
@@ -114,10 +118,11 @@ void p2p_set_topic_subscribed_callback(P2PTopicCallback callback) {
  *
  * This function sets the topic unsubscribed callback function for P2P network. It bridges the provided callback function from C to Go.
  *
+ * @param network The network to manipulate.
  * @param callback The topic unsubscribed callback function to set.
  */
-void p2p_set_topic_unsubscribed_callback(P2PTopicCallback callback) {
-	setTopicUnsubscribedCallback(callback);
+void p2p_set_topic_unsubscribed_callback(P2PNetwork network, P2PTopicCallback callback) {
+	setTopicUnsubscribedCallback(network, callback);
 }
 
 /**
@@ -125,10 +130,11 @@ void p2p_set_topic_unsubscribed_callback(P2PTopicCallback callback) {
  *
  * This function sets the connected callback function for P2P network. It bridges the provided callback function from C to Go.
  *
+ * @param network The network to manipulate.
  * @param callback The connected callback function to set.
  */
-void p2p_set_connected_callback(P2PVoidCallback callback) {
-	setConnectedCallback(callback);
+void p2p_set_connected_callback(P2PNetwork network, P2PVoidCallback callback) {
+	setConnectedCallback(network, callback);
 }
 
 /**
@@ -136,11 +142,21 @@ void p2p_set_connected_callback(P2PVoidCallback callback) {
  *
  * This function sets the disconnected callback function for P2P network. It bridges the provided callback function from C to Go.
  *
+ * @param network The network to manipulate.
  * @param callback The disconnected callback function to set.
  */
-void p2p_set_disconnected_callback(P2PVoidCallback callback) {
-	setDisconnectedCallback(callback);
+void p2p_set_disconnected_callback(P2PNetwork network, P2PVoidCallback callback) {
+	setDisconnectedCallback(network, callback);
 }
+
+/**
+ * @brief Checks if the given network ID is (still) valid!
+ * 
+ * @param network 
+ * @return true 
+ * @return false 
+ */
+bool p2p_network_valid(P2PNetwork network);
 
 /**
  * @brief Generates a P2P key.
@@ -241,9 +257,11 @@ P2PTopic p2p_initialize(P2PInitializationArguments args) {
  * @brief Shuts down P2P network.
  *
  * This function shuts down P2P network by calling the corresponding Go function.
+ * 
+ * @param network The network to manipulate.
  */
-void p2p_shutdown() {
-	shutdown();
+void p2p_shutdown(P2PNetwork network) {
+	shutdown(network);
 }
 
 /**
@@ -252,10 +270,11 @@ void p2p_shutdown() {
  * This function returns the local hashed ID for P2P network by calling the corresponding Go function.
  *
  * @note This pointer is heap allocated and must be freed by the caller!
+ * @param network The network to manipulate.
  * @return The local hashed ID.
  */
-char* p2p_local_id() {
-	return localID();
+char* p2p_local_id(P2PNetwork network) {
+	return localID(network);
 }
 
 /**
@@ -263,15 +282,16 @@ char* p2p_local_id() {
  *
  * This function subscribes to a topic with the provided name and size by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param name The name of the topic.
  * @param nameSize The size of the name.
  * @return The subscribed P2P Topic ID.
  */
-P2PTopic p2p_subscribe_to_topicn(const char* name, int nameSize) {
+P2PTopic p2p_subscribe_to_topicn(P2PNetwork network, const char* name, int nameSize) {
 	GoString s;
 	s.p = name;
 	s.n = nameSize;
-	return subscribeToTopic(s);
+	return subscribeToTopic(network, s);
 }
 
 /**
@@ -279,11 +299,12 @@ P2PTopic p2p_subscribe_to_topicn(const char* name, int nameSize) {
  *
  * This function subscribes to a topic with the provided name by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param name The name of the topic.
  * @return The subscribed P2P topic ID.
  */
-P2PTopic p2p_subscribe_to_topic(const char* name) {
-	return p2p_subscribe_to_topicn(name, strlen(name));
+P2PTopic p2p_subscribe_to_topic(P2PNetwork network, const char* name) {
+	return p2p_subscribe_to_topicn(network, name, strlen(name));
 }
 
 /**
@@ -291,15 +312,16 @@ P2PTopic p2p_subscribe_to_topic(const char* name) {
  *
  * This function finds a topic with the provided name and size by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param name The name of the topic.
  * @param nameSize The size of the name.
  * @return The found P2P Topic ID.
  */
-P2PTopic p2p_find_topicn(const char* name, int nameSize) {
+P2PTopic p2p_find_topicn(P2PNetwork network, const char* name, int nameSize) {
 	GoString s;
 	s.p = name;
 	s.n = nameSize;
-	return findTopic(s);
+	return findTopic(network, s);
 }
 
 /**
@@ -307,11 +329,12 @@ P2PTopic p2p_find_topicn(const char* name, int nameSize) {
  *
  * This function finds a topic with the provided name by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param name The name of the topic.
  * @return The found P2P Topic ID.
  */
-P2PTopic p2p_find_topic(const char* name) {
-	return p2p_find_topicn(name, strlen(name));
+P2PTopic p2p_find_topic(P2PNetwork network, const char* name) {
+	return p2p_find_topicn(network, name, strlen(name));
 }
 
 /**
@@ -319,12 +342,13 @@ P2PTopic p2p_find_topic(const char* name) {
  *
  * This function returns the name of the specified P2P topic by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @note The returned string is heap generated and must be freed by the caller
  * @param topicID The P2P Topic ID.
  * @return The name of the P2P topic.
  */
-char* p2p_topic_name(P2PTopic topicID) {
-	return topicString(topicID);
+char* p2p_topic_name(P2PNetwork network, P2PTopic topicID) {
+	return topicString(network, topicID);
 }
 
 /**
@@ -332,11 +356,12 @@ char* p2p_topic_name(P2PTopic topicID) {
  *
  * This function leaves the specified P2P topic by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param topicID The P2P topic ID to leave.
  * @return True if successfully left the topic, false otherwise.
  */
-bool p2p_leave_topic(P2PTopic topicID) {
-	return leaveTopic(topicID);
+bool p2p_leave_topic(P2PNetwork network, P2PTopic topicID) {
+	return leaveTopic(network, topicID);
 }
 
 /**
@@ -344,16 +369,17 @@ bool p2p_leave_topic(P2PTopic topicID) {
  *
  * This function broadcasts a message to the specified P2P topic with the provided message and size by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param message The message to broadcast.
  * @param messageSize The size of the message.
  * @param topicID The P2P topic ID to broadcast the message to.
  * @return True if the message was successfully broadcasted, false otherwise.
  */
-bool p2p_broadcast_messagen(const char* message, int messageSize, P2PTopic topicID) {
+bool p2p_broadcast_messagen(P2PNetwork network, const char* message, int messageSize, P2PTopic topicID) {
 	GoString m;
 	m.p = message;
 	m.n = messageSize;
-	return broadcastMessage(m, topicID);
+	return broadcastMessage(network, m, topicID);
 }
 
 /**
@@ -361,12 +387,13 @@ bool p2p_broadcast_messagen(const char* message, int messageSize, P2PTopic topic
  *
  * This function broadcasts a message to the specified P2P topic with the provided message by calling the corresponding Go function.
  *
+ * @param network The network to manipulate.
  * @param message The message to broadcast.
  * @param topicID The P2P topic ID to broadcast the message to.
  * @return True if the message was successfully broadcasted, false otherwise.
  */
-bool p2p_broadcast_message(const char* message, P2PTopic topicID) {
-	return p2p_broadcast_messagen(message, strlen(message), topicID);
+bool p2p_broadcast_message(P2PNetwork network, const char* message, P2PTopic topicID) {
+	return p2p_broadcast_messagen(network, message, strlen(message), topicID);
 }
 
 #ifdef __cplusplus

@@ -5,6 +5,7 @@ package main
 #include <stdlib.h>
 
 typedef struct {
+	int network;
 	char* from;
 	char* data;
 	char* seqno;
@@ -14,14 +15,14 @@ typedef struct {
 	char* id;
 	char* recieved_from;
 } Message;
-typedef bool (*msg_callback)(Message*);
-extern bool bridge_msg_callback(Message* m, msg_callback f);
-typedef bool (*void_callback)();
-extern bool bridge_void_callback(void_callback f);
-typedef bool (*peer_callback)(char*);
-extern bool bridge_peer_callback(char* p, peer_callback f);
-typedef bool (*topic_callback)(int);
-extern bool bridge_topic_callback(int t, topic_callback f);
+typedef bool (*msg_callback)(int, Message*);
+extern bool bridge_msg_callback(int n, Message* m, msg_callback f);
+typedef bool (*void_callback)(int);
+extern bool bridge_void_callback(int n, void_callback f);
+typedef bool (*peer_callback)(int, char*);
+extern bool bridge_peer_callback(int n, char* p, peer_callback f);
+typedef bool (*topic_callback)(int, int);
+extern bool bridge_topic_callback(int n, int t, topic_callback f);
 */
 import "C"
 import (
@@ -46,53 +47,53 @@ import (
 	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 )
 
-var messageCallback C.msg_callback
+var messageCallbacks = make(map[int]C.msg_callback)
 
 //export setMessageCallback
-func setMessageCallback(callback C.msg_callback) {
-	messageCallback = callback
+func setMessageCallback(nid int, callback C.msg_callback) {
+	messageCallbacks[nid] = callback
 }
 
-var peerConnectedCallback C.peer_callback
+var peerconnectedCallbacks = make(map[int]C.peer_callback)
 
 //export setPeerConnectedCallback
-func setPeerConnectedCallback(callback C.peer_callback) {
-	peerConnectedCallback = callback
+func setPeerConnectedCallback(nid int, callback C.peer_callback) {
+	peerconnectedCallbacks[nid] = callback
 }
 
-var peerDisconnectedCallback C.peer_callback
+var peerDisconnectedCallbacks = make(map[int]C.peer_callback)
 
 //export setPeerDisconnectedCallback
-func setPeerDisconnectedCallback(callback C.peer_callback) {
-	peerDisconnectedCallback = callback
+func setPeerDisconnectedCallback(nid int, callback C.peer_callback) {
+	peerDisconnectedCallbacks[nid] = callback
 }
 
-var topicSubscribedCallback C.topic_callback
+var topicSubscribedCallbacks = make(map[int]C.topic_callback)
 
 //export setTopicSubscribedCallback
-func setTopicSubscribedCallback(callback C.topic_callback) {
-	topicSubscribedCallback = callback
+func setTopicSubscribedCallback(nid int, callback C.topic_callback) {
+	topicSubscribedCallbacks[nid] = callback
 }
 
-var topicUnsubscribedCallback C.topic_callback
+var topicUnsubscribedCallbacks = make(map[int]C.topic_callback)
 
 //export setTopicUnsubscribedCallback
-func setTopicUnsubscribedCallback(callback C.topic_callback) {
-	topicUnsubscribedCallback = callback
+func setTopicUnsubscribedCallback(nid int, callback C.topic_callback) {
+	topicUnsubscribedCallbacks[nid] = callback
 }
 
-var connectedCallback C.void_callback
+var connectedCallbacks = make(map[int]C.void_callback)
 
 //export setConnectedCallback
-func setConnectedCallback(callback C.void_callback) {
-	connectedCallback = callback
+func setConnectedCallback(nid int, callback C.void_callback) {
+	connectedCallbacks[nid] = callback
 }
 
-var disconnectedCallback C.void_callback
+var disconnectedCallbacks = make(map[int]C.void_callback)
 
 //export setDisconnectedCallback
-func setDisconnectedCallback(callback C.void_callback) {
-	disconnectedCallback = callback
+func setDisconnectedCallback(nid int, callback C.void_callback) {
+	disconnectedCallbacks[nid] = callback
 }
 
 /*
@@ -108,7 +109,7 @@ type Topic struct {
 	subscription *pubsub.Subscription
 }
 
-// State represents the state of the application
+// State represents the State of a network connection
 type State struct {
 	verbose           bool
 	connectionTimeout float64
@@ -120,7 +121,18 @@ type State struct {
 	topics            map[int]Topic // Maps a topicID to the above topic struct
 }
 
-var state State
+var states = make(map[int]State)
+
+//export networksCount
+func networksCount() C.int {
+	return C.int(len(states))
+}
+
+//export networkValid
+func networkValid(nid int) bool {
+	_, ok := states[nid]
+	return ok
+}
 
 // generateCKey exports a cryptographic key to C
 //
@@ -145,16 +157,18 @@ func generateKey() []byte {
 	return keyBytes
 }
 
-// initialize starts up a connection to the p2p network and initializes some library state
+// initialize starts up a connection to the p2p network and initializes some library states
 //
 //export initialize
 func initialize(listenAddress string, discoveryTopic string, keyString string, connectionTimeout float64, verbose bool) int {
-	state.verbose = verbose
-	state.connectionTimeout = connectionTimeout
+	var nid = len(states)
+	var localState State
+	localState.verbose = verbose
+	localState.connectionTimeout = connectionTimeout
 
 	ctx, cancel := context.WithCancel(context.Background())
-	state.ctx = ctx
-	state.cancel = cancel
+	localState.ctx = ctx
+	localState.cancel = cancel
 
 	key := []byte(keyString)
 	if len(key) <= 0 {
@@ -173,58 +187,75 @@ func initialize(listenAddress string, discoveryTopic string, keyString string, c
 	if err != nil {
 		panic(err)
 	}
-	state.host = h
+	localState.host = h
+	states[nid] = localState
 
-	go discoverPeers(state.ctx, state.host, discoveryTopic)
+	go discoverPeers(nid, states[nid].ctx, states[nid].host, discoveryTopic)
 
-	ps, err := pubsub.NewGossipSub(state.ctx, state.host)
+	ps, err := pubsub.NewGossipSub(localState.ctx, localState.host)
 	if err != nil {
 		panic(err)
 	}
-	state.ps = ps
-	state.topics = make(map[int]Topic)
+	localState.ps = ps
+	localState.topics = make(map[int]Topic)
 
-	go trackPeers(state.ctx)
+	states[nid] = localState
 
-	return subscribeToTopic(discoveryTopic)
+	go trackPeers(nid, states[nid].ctx)
+
+	// Make sure we can connect to the discovery topic!
+	if topic := subscribeToTopic(nid, discoveryTopic); topic < 0 {
+		return topic;
+	}
+
+	return nid
 }
 
 // shutdown shuts down the library
 //
 //export shutdown
-func shutdown() {
-	state.cancel()
+func shutdown(nid int) {
+	states[nid].cancel()
 
-	for id := range state.topics {
-		leaveTopic(id)
+	for id := range states[nid].topics {
+		leaveTopic(nid, id)
 	}
-	state.dht.Close()
-	state.host.Close()
-	if !C.bridge_void_callback(disconnectedCallback) {
+	states[nid].dht.Close()
+	states[nid].host.Close()
+	if !C.bridge_void_callback(C.int(nid), disconnectedCallbacks[nid]) {
 		panic("C error!")
 	}
+
+	delete(messageCallbacks, nid)
+	delete(peerconnectedCallbacks, nid)
+	delete(peerDisconnectedCallbacks, nid)
+	delete(topicSubscribedCallbacks, nid)
+	delete(topicUnsubscribedCallbacks, nid)
+	delete(connectedCallbacks, nid)
+	delete(disconnectedCallbacks, nid)
+	delete(states, nid)
 }
 
-// localID returns the hashes ID of the current node
+// localID returns the hashed ID of the current node
 //
 //export localID
-func localID() *C.char {
-	return C.CString(state.host.ID().Pretty())
+func localID(nid int) *C.char {
+	return C.CString(states[nid].host.ID().Pretty())
 }
 
 // subscribeToTopic subscribes to a topic and begins listening to messages sent within it
 //
 //export subscribeToTopic
-func subscribeToTopic(name string) int {
-	id := len(state.topics)
-	if _, ok := state.topics[id]; ok {
-		if state.verbose {
+func subscribeToTopic(nid int, name string) int {
+	id := len(states[nid].topics)
+	if _, ok := states[nid].topics[id]; ok {
+		if states[nid].verbose {
 			fmt.Println("Failed to find topic: " + name)
 		}
 		return -1
 	}
 
-	topic, err := state.ps.Join(name)
+	topic, err := states[nid].ps.Join(name)
 	if err != nil {
 		panic(err)
 	}
@@ -234,10 +265,10 @@ func subscribeToTopic(name string) int {
 		panic(err)
 	}
 
-	state.topics[id] = Topic{name: name, topic: topic, subscription: sub}
+	states[nid].topics[id] = Topic{name: name, topic: topic, subscription: sub}
 
-	go reciever(state.ctx, state.topics[id].subscription)
-	if !C.bridge_topic_callback(C.int(id), topicSubscribedCallback) {
+	go reciever(nid, states[nid].ctx, states[nid].topics[id].subscription)
+	if !C.bridge_topic_callback(C.int(nid), C.int(id), topicSubscribedCallbacks[nid]) {
 		panic("C error!")
 	}
 	return id
@@ -246,8 +277,8 @@ func subscribeToTopic(name string) int {
 // findTopic finds a topicID by name
 //
 //export findTopic
-func findTopic(name string) int {
-	for id, topic := range state.topics {
+func findTopic(nid int, name string) int {
+	for id, topic := range states[nid].topics {
 		if topic.name == name {
 			return id
 		}
@@ -259,8 +290,8 @@ func findTopic(name string) int {
 // topicString returns the name of a topic given its TopicID
 //
 //export topicString
-func topicString(topicID int) *C.char {
-	if t, ok := state.topics[topicID]; ok {
+func topicString(nid int, topicID int) *C.char {
+	if t, ok := states[nid].topics[topicID]; ok {
 		return C.CString(t.name)
 	}
 	return nil
@@ -269,21 +300,19 @@ func topicString(topicID int) *C.char {
 // leaveTopic leaves a topic and stops listening to its messages
 //
 //export leaveTopic
-func leaveTopic(id int) bool {
-	if _, ok := state.topics[id]; !ok {
+func leaveTopic(nid int, id int) bool {
+	if _, ok := states[nid].topics[id]; !ok {
 		return false
+	} 
+	if states[nid].topics[id].subscription != nil {
+		states[nid].topics[id].subscription.Cancel()
 	}
+	if states[nid].topics[id].topic != nil {
+		states[nid].topics[id].topic.Close()
+	}
+	states[nid].topics[id] = Topic{name: "invalid", topic: nil, subscription: nil} // Leave topic in list (technically a memory leak!) so that we don't have id conflicts!
 
-	if state.topics[id].subscription != nil {
-		state.topics[id].subscription.Cancel()
-	}
-	if state.topics[id].topic != nil {
-		state.topics[id].topic.Close()
-	}
-	state.topics[id] = Topic{name: "invalid", topic: nil, subscription: nil} // Leave topic in list (technically a memory leak!) so that we don't have id conflicts!
-	// delete(state.topics, id)
-
-	if !C.bridge_topic_callback(C.int(id), topicUnsubscribedCallback) {
+	if !C.bridge_topic_callback(C.int(nid), C.int(id), topicUnsubscribedCallbacks[nid]) {
 		panic("C error!")
 	}
 	return true
@@ -292,12 +321,12 @@ func leaveTopic(id int) bool {
 // broadcastMessage broadcasts a message to all other peers listening to a topic
 //
 //export broadcastMessage
-func broadcastMessage(message string, topicID int) bool {
-	if t, ok := state.topics[topicID]; !ok || t.topic == nil {
+func broadcastMessage(nid int, message string, topicID int) bool {
+	if t, ok := states[nid].topics[topicID]; !ok || t.topic == nil {
 		return false
 	}
 
-	if err := state.topics[topicID].topic.Publish(state.ctx, []byte(message)); err != nil && state.verbose {
+	if err := states[nid].topics[topicID].topic.Publish(states[nid].ctx, []byte(message)); err != nil && states[nid].verbose {
 		fmt.Println("### Publish error:", err)
 		return false
 	}
@@ -306,7 +335,7 @@ func broadcastMessage(message string, topicID int) bool {
 }
 
 // initDHT initializes the DHT used to find peers
-func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
+func initDHT(nid int, ctx context.Context, h host.Host) *dht.IpfsDHT {
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
 	// DHT, so that the bootstrapping node of the DHT can go down without
@@ -324,7 +353,7 @@ func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := h.Connect(ctx, *peerinfo); err != nil && state.verbose {
+			if err := h.Connect(ctx, *peerinfo); err != nil && states[nid].verbose {
 				fmt.Println("Bootstrap warning:", err)
 			}
 		}()
@@ -335,11 +364,14 @@ func initDHT(ctx context.Context, h host.Host) *dht.IpfsDHT {
 }
 
 // discoverPeers discovers peers and establishes connections to them
-func discoverPeers(inCTX context.Context, h host.Host, advertisingTopic string) {
-	ctx, cancel := context.WithTimeout(inCTX, time.Duration(state.connectionTimeout*float64(time.Second)))
+func discoverPeers(nid int, inCTX context.Context, h host.Host, advertisingTopic string) {
+	ctx, cancel := context.WithTimeout(inCTX, time.Duration(states[nid].connectionTimeout*float64(time.Second)))
 	defer cancel()
-	kademliaDHT := initDHT(ctx, h)
-	state.dht = kademliaDHT
+	kademliaDHT := initDHT(nid, ctx, h)
+	if localState, ok := states[nid]; ok {
+		localState.dht = kademliaDHT
+		states[nid] = localState
+	}
 	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
 	dutil.Advertise(ctx, routingDiscovery, advertisingTopic)
 
@@ -365,11 +397,11 @@ func discoverPeers(inCTX context.Context, h host.Host, advertisingTopic string) 
 					}
 					err := h.Connect(ctx, peer)
 					if err != nil {
-						if state.verbose {
+						if states[nid].verbose {
 							fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
 						}
 					} else {
-						if state.verbose {
+						if states[nid].verbose {
 							fmt.Println("Connected to:", peer.ID.Pretty())
 						}
 						anyConnected = true
@@ -381,11 +413,11 @@ func discoverPeers(inCTX context.Context, h host.Host, advertisingTopic string) 
 	}
 
 	fmt.Println("Peer discovery complete!")
-	C.bridge_void_callback(connectedCallback)
+	C.bridge_void_callback(C.int(nid), connectedCallbacks[nid])
 }
 
 // trackPeers tracks connected and disconnected peers and fires events when peers connect or disconnect
-func trackPeers(ctx context.Context) {
+func trackPeers(nid int, ctx context.Context) {
 	connectedPeers := make(map[peer.ID]struct{})
 
 	for {
@@ -397,8 +429,8 @@ func trackPeers(ctx context.Context) {
 			newPeers := make([]peer.ID, 0)
 			disconnectedPeers := make([]peer.ID, 0)
 
-			for _, topic := range state.ps.GetTopics() {
-				peers = append(peers, state.ps.ListPeers(topic)...)
+			for _, topic := range states[nid].ps.GetTopics() {
+				peers = append(peers, states[nid].ps.ListPeers(topic)...)
 			}
 
 			// Check for new peers
@@ -420,7 +452,7 @@ func trackPeers(ctx context.Context) {
 			for _, peerID := range newPeers {
 				c := C.CString(peerID.Pretty())
 				defer C.free(unsafe.Pointer(c))
-				if !C.bridge_peer_callback(c, peerConnectedCallback) {
+				if !C.bridge_peer_callback(C.int(nid), c, peerconnectedCallbacks[nid]) {
 					panic("C error!")
 				}
 			}
@@ -428,7 +460,7 @@ func trackPeers(ctx context.Context) {
 			for _, peerID := range disconnectedPeers {
 				c := C.CString(peerID.Pretty())
 				defer C.free(unsafe.Pointer(c))
-				if !C.bridge_peer_callback(c, peerDisconnectedCallback) {
+				if !C.bridge_peer_callback(C.int(nid), c, peerDisconnectedCallbacks[nid]) {
 					panic("C error!")
 				}
 			}
@@ -447,7 +479,7 @@ func containsPeer(peers []peer.ID, target peer.ID) bool {
 }
 
 // reciever receives messages from a subscription
-func reciever(ctx context.Context, sub *pubsub.Subscription) {
+func reciever(nid int, ctx context.Context, sub *pubsub.Subscription) {
 	for {
 		m, err := sub.Next(ctx)
 		if m == nil { // This happens when the context gets canceled!
@@ -457,6 +489,7 @@ func reciever(ctx context.Context, sub *pubsub.Subscription) {
 			panic(err)
 		}
 
+		cnid := C.int(nid)
 		cfrom := C.CString(string(m.Message.From))
 		defer C.free(unsafe.Pointer(cfrom))
 		cdata := C.CString(string(m.Message.Data))
@@ -474,8 +507,8 @@ func reciever(ctx context.Context, sub *pubsub.Subscription) {
 		creceivedFrom := C.CString(m.ReceivedFrom.Pretty())
 		defer C.free(unsafe.Pointer(creceivedFrom))
 
-		msg := C.Message{from: cfrom, data: cdata, seqno: cseqno, topic: ctopic, signature: csignature, key: ckey, id: cID, recieved_from: creceivedFrom}
-		if !C.bridge_msg_callback(&msg, messageCallback) {
+		msg := C.Message{network: cnid, from: cfrom, data: cdata, seqno: cseqno, topic: ctopic, signature: csignature, key: ckey, id: cID, recieved_from: creceivedFrom}
+		if !C.bridge_msg_callback(cnid, &msg, messageCallbacks[nid]) {
 			panic("Failed to pass message to C!")
 		}
 	}

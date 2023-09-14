@@ -8,7 +8,7 @@
 #include "simplep2p.hpp"
 
 
-void print(p2p::Message& message) {
+void print(p2p::Network& network, p2p::Message& message) {
 	if(message.is_local())
 		return;
 
@@ -18,24 +18,24 @@ void print(p2p::Message& message) {
 }
 
 
-void peerJoined(p2p::PeerID::view id) {
+void peerJoined(p2p::Network& network, p2p::PeerID::view id) {
 	std::cout << id << " connected!" << std::endl;
 }
 
-void peerLeft(p2p::PeerID::view id) {
+void peerLeft(p2p::Network& network, p2p::PeerID::view id) {
 	std::cout << id << " disconnected!" << std::endl;
 }
 
-void topicSubscribed(p2p::Topic topic) {
+void topicSubscribed(p2p::Network& network, p2p::Topic topic) {
 	std::cout << "subscribed to topic " << topic.id << " aka. " << topic.name() << std::endl;
 }
 
-void topicUnsubscribed(p2p::Topic topic) {
+void topicUnsubscribed(p2p::Network& network, p2p::Topic topic) {
 	std::cout << "unsubscribed to topic " << topic.id << " aka. " << topic.name() << std::endl;
 }
 
-void connected() {
-	topicSubscribed(p2p::Network::get_singleton().defaultTopic);
+void connected(p2p::Network& network) {
+	topicSubscribed(network, network.defaultTopic);
 	std::cout << "connected to the network!\n> " << std::flush;
 }
 
@@ -60,15 +60,15 @@ int main(int argc, char* argv[]) {
 		key.load(fin);
 	}
 
-	p2p::Network net(p2p::default_listen_address, "chat/v1.0.0", key, connected);
+	p2p::Network net(p2p::default_listen_address, "simplep2p/examples/chat/v1.0.0", key, connected);
 
-	net.on_message += print;
+	net.on_message = print;
 
-	net.on_peer_connected += peerJoined; // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
-	net.on_peer_disconnected += peerLeft; // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
+	net.on_peer_connected = peerJoined; // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
+	net.on_peer_disconnected = peerLeft; // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
 
-	net.on_topic_subscribed += topicSubscribed;
-	net.on_topic_unsubscribed += topicUnsubscribed;
+	net.on_topic_subscribed = topicSubscribed;
+	net.on_topic_unsubscribed = topicUnsubscribed;
 
 	std::string line;
 	while(true){

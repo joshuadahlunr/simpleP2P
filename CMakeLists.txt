@@ -31,7 +31,7 @@ target_go_get_dependency(simplep2p_golib NAME get_libp2p PACKAGES github.com/lib
 
 add_library(simplep2p STATIC src/simplep2p.c)
 target_include_directories(simplep2p PUBLIC src)
-target_link_libraries(simplep2p simplep2p_golib)
+target_link_libraries(simplep2p PRIVATE simplep2p_golib)
 
 if(BUILD_EXAMPLES)
 	add_subdirectory(examples/argparse)
