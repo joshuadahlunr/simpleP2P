@@ -261,6 +261,7 @@ P2PInitializationArguments p2p_default_initialize_args() {
 	out.discoveryTopicSize = strlen(out.discoveryTopic);
 	out.identity = p2p_null_key();
 	out.connectionTimeout = 60 /*seconds*/;
+	out.fullyConnected = false;
 	out.verbose = false;
 	return out;
 }
@@ -277,7 +278,7 @@ P2PInitializationArguments p2p_default_initialize_args() {
  * @param verbose The verbose flag.
  * @return The initialization arguments.
  */
-P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAddress, const char* discoveryTopic, P2PKey identity, double connectionTimeout, bool verbose) {
+P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAddress, const char* discoveryTopic, P2PKey identity, double connectionTimeout, bool fullyConnected, bool verbose) {
 	P2PInitializationArguments out;
 	out.listenAddress = listenAddress;
 	out.listenAddressSize = strlen(out.listenAddress);
@@ -285,6 +286,7 @@ P2PInitializationArguments p2p_initialize_args_from_strings(const char* listenAd
 	out.discoveryTopicSize = strlen(out.discoveryTopic);
 	out.identity = identity;
 	out.connectionTimeout = connectionTimeout;
+	out.fullyConnected = fullyConnected;
 	out.verbose = verbose;
 	return out;
 }
@@ -307,7 +309,7 @@ P2PTopic p2p_initialize(P2PInitializationArguments args) {
 	GoString key;
 	key.p = args.identity.data;
 	key.n = args.identity.size;
-	return initialize(listenAddress, discoveryTopic, key, args.connectionTimeout, args.verbose);
+	return initialize(listenAddress, discoveryTopic, key, args.connectionTimeout, args.fullyConnected, args.verbose);
 }
 
 /**

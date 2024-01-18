@@ -239,6 +239,7 @@ namespace p2p {
 		 * @param identityKey The identity key for network initialization.
 		 * @param do_on_connected Callback function to register in on_connected before initializing the connection
 		 * @param connectionTimeout The time to wait for a connection before giving up.
+		 * @param fullyConnected Weather or not every message should be sent to every peer, or if the network should be more intelligent.
 		 * @param verbose Flag indicating if the GO library should spew some more verbose messages.
 		 */
 		Network(
@@ -247,12 +248,13 @@ namespace p2p {
 			const Key& identityKey = {},
 			delegate_function<void(Network&)> do_on_connected = nullptr,
 			std::chrono::milliseconds connectionTimeout = std::chrono::seconds(60),
+			bool fullyConnected = false,
 			bool verbose = false
 		) {
 			if(do_on_connected != nullptr)
 				on_connected = do_on_connected;
 
-			initialize(listenAddress, discoveryTopic, identityKey, connectionTimeout, verbose);
+			initialize(listenAddress, discoveryTopic, identityKey, connectionTimeout, fullyConnected, verbose);
 		}
 
 		/**
@@ -290,6 +292,7 @@ namespace p2p {
 		 * @param discoveryTopic The discovery topic for network initialization.
 		 * @param identityKey The identity key for network initialization.
 		 * @param connectionTimeout The time to wait for a connection before giving up.
+		 * @param fullyConnected Weather or not every message should be sent to every peer, or if the network should be more intelligent.
 		 * @param verbose Flag indicating if the GO library should spew some more verbose messages.
 		 */
 		void initialize(
@@ -297,6 +300,7 @@ namespace p2p {
 			std::string_view discoveryTopic = default_discovery_topic,
 			const Key& identityKey = {},
 			std::chrono::milliseconds connectionTimeout = std::chrono::seconds(60),
+			bool fullyConnected = false,
 			bool verbose = false
 		) {
 			// Connect the connect delegate to its callback
@@ -310,6 +314,7 @@ namespace p2p {
 				.discoveryTopicSize = (long long)discoveryTopic.size(),
 				.identity = identityKey,
 				.connectionTimeout = std::chrono::duration_cast<std::chrono::duration<double>>(connectionTimeout).count(),
+				.fullyConnected = fullyConnected,
 				.verbose = verbose
 			});
 

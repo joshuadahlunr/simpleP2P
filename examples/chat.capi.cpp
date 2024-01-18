@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
 	p2p_set_peer_connected_callback(p2p_initial_network(), peerJoined); // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
 	p2p_set_peer_disconnected_callback(p2p_initial_network(), peerLeft); // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
 
-	auto network = p2p_initialize(p2p_initialize_args_from_strings("/ip4/0.0.0.0/udp/0/quic-v1", "simplep2p/examples/chat/capi/v1.0.0", key, 60, false));
+	auto network = p2p_initialize(p2p_initialize_args_from_strings("/ip4/0.0.0.0/udp/0/quic-v1", "simplep2p/examples/chat/capi/v1.0.0", key, 60, false, false));
 
 	p2p_set_message_callback(network, print);
 	p2p_set_connected_callback(network, connected);

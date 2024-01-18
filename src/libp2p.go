@@ -176,7 +176,7 @@ func generateKey() []byte {
 // initialize starts up a connection to the p2p network and initializes some library states
 //
 //export initialize
-func initialize(listenAddress string, discoveryTopic string, keyString string, connectionTimeout float64, verbose bool) int {
+func initialize(listenAddress string, discoveryTopic string, keyString string, connectionTimeout float64, fullyConnected bool, verbose bool) int {
 	var nid = len(states)
 	var localState State
 	localState.verbose = verbose
@@ -208,11 +208,20 @@ func initialize(listenAddress string, discoveryTopic string, keyString string, c
 
 	go discoverPeers(nid, states[nid].ctx, states[nid].host, discoveryTopic)
 
-	ps, err := pubsub.NewGossipSub(localState.ctx, localState.host)
-	if err != nil {
-		panic(err)
+	if fullyConnected {
+		ps, err := pubsub.NewFloodSub(localState.ctx, localState.host)
+		if err != nil {
+			panic(err)
+		}
+		localState.ps = ps
+	} else {
+		ps, err := pubsub.NewGossipSub(localState.ctx, localState.host)
+		if err != nil {
+			panic(err)
+		}
+		localState.ps = ps
 	}
-	localState.ps = ps
+
 	localState.topics = make(map[int]Topic)
 
 	states[nid] = localState
