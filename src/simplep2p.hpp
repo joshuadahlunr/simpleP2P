@@ -46,6 +46,32 @@ namespace p2p {
 	constexpr std::string_view default_discovery_topic = "simpleP2P";
 
 	/**
+	 * @brief Returns the provided string encoded as a base64 string
+	 *
+	 * @param string The string to encode
+	 * @return std::string The base64 encoded version of str
+	 */
+	std::string base64_encode(std::string_view string) {
+		auto go = p2p_base64_encoden(string.data(), string.size());
+		std::string out(go.data, go.size);
+		free(go.data);
+		return out;
+	}
+
+	/**
+	 * @brief Returns the provided string decoded from a base64 string
+	 *
+	 * @param string The string to decode
+	 * @return std::string The base64 decoded version of str
+	 */
+	std::string base64_decode(std::string_view string) {
+		auto go = p2p_base64_decoden(string.data(), string.size());
+		std::string out(go.data, go.size);
+		free(go.data);
+		return out;
+	}
+
+	/**
 	 * @class Key
 	 * @brief Represents a P2P cryptographic private key.
 	 */
@@ -193,7 +219,7 @@ namespace p2p {
 		P2PNetwork network = p2p_initial_network();
 
 		/**
-		 * @brief the default topic that the network originally joined 
+		 * @brief the default topic that the network originally joined
 		 */
 		Topic defaultTopic;
 
@@ -249,7 +275,7 @@ namespace p2p {
 		 * @brief Move constructor (deleted).
 		 */
 		Network(const Network&&) = delete;
-		// Network(Network&& o) : network(o.network), defaultTopic(o.defaultTopic), 
+		// Network(Network&& o) : network(o.network), defaultTopic(o.defaultTopic),
 		// 	on_message(o.on_message),
 		// 	on_peer_connected(o.on_peer_connected),
 		// 	on_peer_disconnected(o.on_peer_disconnected),
@@ -499,7 +525,7 @@ namespace p2p {
 		 * @return True if the message was sent by the local node, false otherwise.
 		 */
 		bool is_local() { return is_local(lookup_network()); }
-		
+
 	};
 }
 

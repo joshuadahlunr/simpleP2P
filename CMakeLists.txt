@@ -1,15 +1,6 @@
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-cmake_minimum_required(VERSION 3.20)
-
-if(CMAKE_VERSION VERSION_LESS 3.21)
-	get_property(not_top DIRECTORY PROPERTY PARENT_DIRECTORY)
-	if(not_top)
-		set(PROJECT_IS_TOP_LEVEL off)
-	else()
-		set(PROJECT_IS_TOP_LEVEL true)
-	endif()
-endif()
+cmake_minimum_required(VERSION 3.21)
 
 option(BUILD_EXAMPLES "Build the example applications" ${PROJECT_IS_TOP_LEVEL})
 

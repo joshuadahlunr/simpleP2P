@@ -67,6 +67,9 @@ int main(int argc, char* argv[]) {
 		key.load(fin);
 	}
 
+	std::cout << p2p_base64_encoden("hello world\0this is a second part of the message", 48).data << std::endl;
+	std::cout << p2p_base64_decode("aGVsbG8gd29ybGQAdGhpcyBpcyBhIHNlY29uZCBwYXJ0IG9mIHRoZSBtZXNzYWdl").data[41] << std::endl;
+
 	p2p_set_peer_connected_callback(p2p_initial_network(), peerJoined); // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
 	p2p_set_peer_disconnected_callback(p2p_initial_network(), peerLeft); // NOTE: these callbacks will only be called for peers directly connected... if you need to know about all peers in the network that will need to be done at a higher level!
 

@@ -55,10 +55,11 @@ typedef struct {
 	char* data;
 	int size;
 } P2PKey;
+typedef P2PKey P2PString;
 
 /**
  * @brief Returns the initial network id
- * 
+ *
  * @param network the network in question
  * @return the id of the first network to be created
  */
@@ -66,7 +67,7 @@ inline P2PNetwork p2p_initial_network() { return 0; }
 
 /**
  * @brief Checks if the given network ID is (still) valid (has been created and has not been shutdown)!
- * 
+ *
  * @param network the network in question
  * @return wether or not the network is still valid
  */
@@ -74,11 +75,47 @@ bool p2p_network_valid(P2PNetwork network);
 
 /**
  * @brief Returns the default network topic id
- * 
+ *
  * @param network the network in question
  * @return the id of the first topic to be created
  */
 inline P2PTopic p2p_default_topic(P2PNetwork) { return 0; }
+
+/**
+ * @brief Returns the provided string encoded as a base64 string
+ * @note Sized version
+ *
+ * @param str The string to encode
+ * @param size The length of the string
+ * @return P2PString The base64 encoded version of str
+ */
+P2PString p2p_base64_encoden(const char* str, int size);
+
+/**
+ * @brief Returns the provided string encoded as a base64 string
+ *
+ * @param str The string to encode
+ * @return P2PString The base64 encoded version of str
+ */
+P2PString p2p_base64_encode(const char* str);
+
+/**
+ * @brief Returns the provided string decoded from a base64 string
+ * @note Sized version
+ *
+ * @param str The string to decode
+ * @param size The length of the string
+ * @return P2PString The base64 decoded version of str
+ */
+P2PString p2p_base64_decoden(const char* str, int size);
+
+/**
+ * @brief Returns the provided string decoded from a base64 string
+ *
+ * @param str The string to decode
+ * @return P2PString The base64 decoded version of str
+ */
+P2PString p2p_base64_decode(const char* str);
 
 /**
  * @brief Generates a P2P key.
@@ -153,7 +190,7 @@ P2PNetwork p2p_initialize(P2PInitializationArguments args);
  * @brief Shuts down P2P network.
  *
  * This function shuts down P2P network by calling the corresponding Go function.
- * 
+ *
  * @param network The network to manipulate.
  */
 void p2p_shutdown(P2PNetwork network);

@@ -60,6 +60,9 @@ int main(int argc, char* argv[]) {
 		key.load(fin);
 	}
 
+	std::cout << p2p::base64_encode({"hello world\0this is a second part of the message", 48}) << std::endl;
+	std::cout << p2p::base64_decode("aGVsbG8gd29ybGQAdGhpcyBpcyBhIHNlY29uZCBwYXJ0IG9mIHRoZSBtZXNzYWdl")[41] << std::endl;
+
 	p2p::Network net(p2p::default_listen_address, "simplep2p/examples/chat/v1.0.0", key, connected);
 
 	net.on_message = print;

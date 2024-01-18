@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "libsimplep2p_golib.h": "c"
+    },
+    "cmake.configureOnOpen": true
+}

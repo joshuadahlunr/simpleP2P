@@ -28,6 +28,7 @@ import "C"
 import (
 	"context"
 	"crypto/rand"
+	b64 "encoding/base64"
 	"fmt"
 	"sync"
 	"time"
@@ -134,6 +135,21 @@ func networkValid(nid int) bool {
 	return ok
 }
 
+//export base64Encode
+func base64Encode(str *C.char, size C.int) (*C.char, C.int) {
+	encoded := b64.URLEncoding.EncodeToString(C.GoBytes(unsafe.Pointer(str), size))
+	return C.CString(encoded), C.int(len(encoded))
+}
+
+//export base64Decode
+func base64Decode(encoded string) (*C.char, C.int) {
+	decoded, ok := b64.URLEncoding.DecodeString(encoded)
+	if ok != nil {
+		return nil, -1
+	}
+	return (*C.char)(C.CBytes(decoded)), C.int(len(decoded))
+}
+
 // generateCKey exports a cryptographic key to C
 //
 //export generateCKey
@@ -205,7 +221,7 @@ func initialize(listenAddress string, discoveryTopic string, keyString string, c
 
 	// Make sure we can connect to the discovery topic!
 	if topic := subscribeToTopic(nid, discoveryTopic); topic < 0 {
-		return topic;
+		return topic
 	}
 
 	return nid
@@ -240,7 +256,7 @@ func shutdown(nid int) {
 //
 //export localID
 func localID(nid int) *C.char {
-	return C.CString(states[nid].host.ID().Pretty())
+	return C.CString(string(states[nid].host.ID()))
 }
 
 // subscribeToTopic subscribes to a topic and begins listening to messages sent within it
@@ -303,7 +319,7 @@ func topicString(nid int, topicID int) *C.char {
 func leaveTopic(nid int, id int) bool {
 	if _, ok := states[nid].topics[id]; !ok {
 		return false
-	} 
+	}
 	if states[nid].topics[id].subscription != nil {
 		states[nid].topics[id].subscription.Cancel()
 	}
@@ -398,11 +414,11 @@ func discoverPeers(nid int, inCTX context.Context, h host.Host, advertisingTopic
 					err := h.Connect(ctx, peer)
 					if err != nil {
 						if states[nid].verbose {
-							fmt.Println("Failed connecting to ", peer.ID.Pretty(), ", error:", err)
+							fmt.Println("Failed connecting to ", string(peer.ID), ", error:", err)
 						}
 					} else {
 						if states[nid].verbose {
-							fmt.Println("Connected to:", peer.ID.Pretty())
+							fmt.Println("Connected to:", string(peer.ID))
 						}
 						anyConnected = true
 					}
@@ -450,7 +466,7 @@ func trackPeers(nid int, ctx context.Context) {
 			}
 
 			for _, peerID := range newPeers {
-				c := C.CString(peerID.Pretty())
+				c := C.CString(string(peerID))
 				defer C.free(unsafe.Pointer(c))
 				if !C.bridge_peer_callback(C.int(nid), c, peerconnectedCallbacks[nid]) {
 					panic("C error!")
@@ -458,7 +474,7 @@ func trackPeers(nid int, ctx context.Context) {
 			}
 
 			for _, peerID := range disconnectedPeers {
-				c := C.CString(peerID.Pretty())
+				c := C.CString(string(peerID))
 				defer C.free(unsafe.Pointer(c))
 				if !C.bridge_peer_callback(C.int(nid), c, peerDisconnectedCallbacks[nid]) {
 					panic("C error!")
@@ -504,7 +520,7 @@ func reciever(nid int, ctx context.Context, sub *pubsub.Subscription) {
 		defer C.free(unsafe.Pointer(ckey))
 		cID := C.CString(string(m.ID))
 		defer C.free(unsafe.Pointer(cID))
-		creceivedFrom := C.CString(m.ReceivedFrom.Pretty())
+		creceivedFrom := C.CString(string(m.ReceivedFrom))
 		defer C.free(unsafe.Pointer(creceivedFrom))
 
 		msg := C.Message{network: cnid, from: cfrom, data: cdata, seqno: cseqno, topic: ctopic, signature: csignature, key: ckey, id: cID, recieved_from: creceivedFrom}
